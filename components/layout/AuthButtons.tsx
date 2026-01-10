@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 
 export const AuthButtons = () => {
-    const { user, login, loading, error, debugLogin } = useAuth();
+    const { user, login, logout, loading, error, debugLogin } = useAuth();
     const [showErrorDialog, setShowErrorDialog] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
 
