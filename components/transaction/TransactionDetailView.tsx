@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import React, { useState } from 'react';
 import { Item, Transaction, TransactionStatus, User } from '@/types';
@@ -16,6 +16,7 @@ import { stripePromise } from '@/lib/stripe';
 import StripePaymentForm from './StripePaymentForm';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
+import { ChatRoom } from '@/components/chat/ChatRoom';
 
 interface TransactionDetailViewProps {
     transaction: Transaction;
@@ -405,6 +406,13 @@ Musashino Linkで連絡先を確認しました。
                     </CardContent>
                 </Card>
             )}
+
+            {/* --- Chat Room (Available in all phases) --- */}
+            <ChatRoom
+                transactionId={transaction.id}
+                buyerId={transaction.buyer_id}
+                sellerId={transaction.seller_id}
+            />
         </div>
     );
 };

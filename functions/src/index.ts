@@ -608,3 +608,6 @@ export const adminCancelTransaction = functions.https.onCall(async (data, contex
         throw new functions.https.HttpsError('internal', e.message);
     }
 });
+
+// [Phase 2] Notifications
+export * from "./notifications";
