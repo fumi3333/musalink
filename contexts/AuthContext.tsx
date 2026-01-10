@@ -141,16 +141,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const debugLogin = async (role: 'seller' | 'buyer' = 'seller') => {
         try {
+            // Store preference BEFORE sign in to avoid race condition with onAuthStateChanged
+            sessionStorage.setItem('debug_user_role', role);
+
             // Use Anonymous Auth for Real Security Rules
             const { signInAnonymously } = await import('firebase/auth');
             await signInAnonymously(auth);
 
-            // Store preference to hydrate userData later
-            sessionStorage.setItem('debug_user_role', role);
             toast.success(`テスト用アカウント(${role})でログインしました`);
             // onAuthStateChanged will handle the rest
         } catch (e: any) {
             console.error("Debug Login Error", e);
+            sessionStorage.removeItem('debug_user_role'); // Clean up if failed
             toast.error("テストログインに失敗しました");
         }
     };
