@@ -1,0 +1,167 @@
+"use client"
+
+import React, { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
+import { getTransaction, getItem, getUser, updateTransactionStatus } from '@/services/firestore';
+import { Transaction, Item, User, TransactionStatus } from '@/types';
+import { TransactionDetailView } from '@/components/transaction/TransactionDetailView';
+import { functions } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { useAuth } from '@/contexts/AuthContext';
+
+function TransactionDetailContent() {
+    const searchParams = useSearchParams();
+    const transactionId = searchParams.get('id');
+    const { userData } = useAuth(); // Get actual logged-in user
+
+    const [transaction, setTransaction] = useState<Transaction | null>(null);
+    const [item, setItem] = useState<Item | null>(null);
+    const [seller, setSeller] = useState<User | null>(null);
+    // const [currentUser, setCurrentUser] = useState<User | null>(null); // Removed local state
+    const [clientSecret, setClientSecret] = useState<string | undefined>(undefined);
+    const [loading, setLoading] = useState(true);
+
+    const fetchData = async () => {
+        if (!transactionId) return;
+        try {
+            // 1. Fetch Transaction first (needed for IDs)
+            const tx = await getTransaction(transactionId);
+            if (!tx) throw new Error("Transaction not found");
+            setTransaction(tx);
+
+            // 2. Fetch Item and Seller
+            const [itm, sellerData] = await Promise.all([
+                getItem(tx.item_id),
+                getUser(tx.seller_id)
+            ]);
+
+            if (!itm) throw new Error("Item not found");
+            setItem(itm);
+            setSeller(sellerData);
+
+            // Note: We don't force 'currentUser' to be the buyer anymore. 
+            // We use 'userData' from useAuth().
+
+            // 3. [Security Fix] Fetch Client Secret if Approved (needed for Payment Form)
+            // Only if I am the buyer and status is 'approved'
+            const isBuyer = userData?.id === tx.buyer_id;
+
+            if (tx.status === 'approved' && isBuyer) {
+                try {
+                    const createIntentFn = httpsCallable(functions, 'createPaymentIntent');
+                    // We assume userData has ID. 
+                    if (userData?.id) {
+                        const res = await createIntentFn({
+                            transactionId: tx.id,
+                            userId: userData.id
+                        }) as { data: { clientSecret: string } };
+                        setClientSecret(res.data.clientSecret);
+                    }
+                } catch (intentErr) {
+                    console.error("Failed to fetch payment intent", intentErr);
+                }
+            }
+
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (transactionId && userData) fetchData();
+        // If userData is needed for logic? fetchData depends on userData for the clientSecret check.
+        // If userData loads *after* transactionId, we should trigger.
+        // Actually, if userData is missing (not logged in), we might just show loading or error?
+    }, [transactionId, userData]); // Add userData dependency
+
+    const handleStatusChange = async (newStatus: TransactionStatus) => {
+        if (!transaction || !transactionId) return;
+
+        // Optimistic Update
+        setTransaction(prev => prev ? { ...prev, status: newStatus } : null);
+
+        try {
+            // DEMO MODE CHECK
+            const currentUser = userData as User; // safe cast for now
+            const isDemoUser = currentUser?.university_email?.startsWith('s2527');
+
+            if (newStatus === 'completed') {
+                if (isDemoUser) {
+                    // DEMO MODE: Bypass Cloud Function / Stripe
+                    // Directly update Firestore + Unlock Mock Data
+                    const { updateTransactionStatus } = await import('@/services/firestore');
+                    const { Timestamp } = await import('firebase/firestore');
+
+                    await updateTransactionStatus(transactionId, 'completed', {
+                        unlocked_assets: {
+                            student_id: seller?.student_id || "s9999999",
+                            university_email: seller?.university_email || "demo@musashino-u.ac.jp",
+                            unlockedAt: Timestamp.now()
+                        }
+                    });
+                    toast.success("決済完了！(デモモード: Stripeスキップ)");
+                } else {
+                    // [SECURITY] Standard Flow
+                    setLoading(true);
+                    const unlockFn = httpsCallable(functions, 'unlockTransaction');
+
+                    await unlockFn({
+                        transactionId: transactionId,
+                        userId: currentUser?.id
+                    });
+                }
+            } else {
+                // Other statuses (approve/reject) still use direct update for now (MVP)
+                await updateTransactionStatus(transactionId, newStatus);
+                toast.success("ステータスを更新しました");
+            }
+
+            // Re-fetch to see the updated state (and unlocked assets from server)
+            await fetchData();
+
+        } catch (e: any) {
+            console.error("Failed to update status", e);
+            toast.error(`エラーが発生しました: ${e.message || "Unknown Error"}`);
+            // Revert optimism
+            setTransaction(transaction); // Reset to original state
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!transactionId) return <div className="p-20 text-center">Invalid Transaction ID</div>;
+    // Don't show loading forever if userData is missing (e.g. not logged in)
+    // But for now, MVP assumes auth.
+    if (loading && !transaction) return <div className="p-20 text-center">Loading Transaction...</div>;
+
+    // Check missing data
+    if (!transaction || !item || !seller) return <div className="p-20 text-center">Data not found</div>;
+    if (!userData) return <div className="p-20 text-center">Please log in to view this transaction</div>;
+
+    return (
+        <div className="min-h-screen bg-slate-50 py-10 px-4">
+            <div className="max-w-4xl mx-auto">
+                <h1 className="text-xl font-bold mb-6 text-slate-700">Transaction Details</h1>
+                <TransactionDetailView
+                    transaction={transaction}
+                    item={item}
+                    seller={seller}
+                    currentUser={userData as User}
+                    onStatusChange={handleStatusChange}
+                    clientSecret={clientSecret}
+                />
+            </div>
+        </div>
+    );
+}
+
+export default function TransactionDetailPage() {
+    return (
+        <Suspense fallback={<div className="p-20 text-center">Loading...</div>}>
+            <TransactionDetailContent />
+        </Suspense>
+    );
+}

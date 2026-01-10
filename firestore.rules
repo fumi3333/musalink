@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper: Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Check if user is owner of the user profile
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users: Public Read (Profiles), Owner Write
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false; // Admin only
+    }
+
+    // Items: Public Read, Seller Write
+    match /items/{itemId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.seller_id == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
+    }
+
+    // Transactions: Involved Parties Only
+    match /transactions/{transactionId} {
+      // Read: Buyer or Seller
+      allow read: if isAuthenticated() && (resource.data.buyer_id == request.auth.uid || resource.data.seller_id == request.auth.uid);
+      
+      // Create: Buyer only (must match auth uid)
+      allow create: if isAuthenticated() && request.resource.data.buyer_id == request.auth.uid;
+      
+      // Update: Buyer or Seller, BUT Restricted Status Changes
+      allow update: if isAuthenticated() 
+                    && (resource.data.buyer_id == request.auth.uid || resource.data.seller_id == request.auth.uid)
+                    && (
+                      // 1. Allow non-status updates (or same status) - e.g. meeting place
+                      (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
+                      ||
+                      // 2. Allowed Status Transitions
+                      (
+                         // request_sent -> cancelled / approved
+                         (resource.data.status == 'request_sent' && (request.resource.data.status == 'cancelled' || request.resource.data.status == 'approved'))
+                         ||
+                         // approved -> payment_pending
+                         (resource.data.status == 'approved' && request.resource.data.status == 'payment_pending')
+                      )
+                      ||
+                      // 3. [DEMO EXCEPTION] Allow 'completed' ONLY for Demo Transactions
+                      (
+                        resource.data.is_demo == true 
+                        && request.resource.data.status == 'completed'
+                      )
+                    );
+    }
+  }
+}

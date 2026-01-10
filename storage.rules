@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// Craft rules based on data in your Firestore database
+// allow write: if firestore.get(
+//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper: Auth Check
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Valid Image Check (Size < 5MB, Type: Image)
+    function isValidImage() {
+      return request.resource.size < 5 * 1024 * 1024
+             && request.resource.contentType.matches('image/.*');
+    }
+
+    // 1. User Profile Images & Listings
+    // Path: users/{userId}/{fileName}
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true; // Publicly viewable
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId
+                   && isValidImage();
+    }
+
+    // 2. Item Images (if stored separately, though often inside users or flat)
+    // Assuming structure: items/{itemId}/{fileName}
+    // But usually we need to know who owns the item. 
+    // For MVP, letting users upload to their own folder `users/{uid}/items/...` is safest.
+    // If saving to top level `items/`, we'd need Firestore lookup which is expensive/complex in Storage Rules.
+    // -> Strategy: Enforce client to upload to `items/{uid}/{timestamp_filename}` or similar.
+    
+    // Let's use a generic 'uploads/{userId}' path as well or match above.
+    
+    // Default Deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
