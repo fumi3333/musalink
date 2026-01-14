@@ -161,6 +161,77 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
     return { success: true, message: "Transaction unlocked." };
 }
 
+// [Phase 11] Create Payment Intent (Platform-Held / Hybrid)
+export const createPaymentIntent = functions.https.onCall(async (data, context) => {
+    // Auth Check
+    const userId = data.userId;
+    const transactionId = data.transactionId;
+
+    if (!userId || !transactionId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing userId or transactionId');
+    }
+
+    try {
+        await checkRateLimit(userId, 'createPaymentIntent', 10, 3600);
+
+        const txDoc = await db.collection('transactions').doc(transactionId).get();
+        if (!txDoc.exists) throw new Error("Transaction not found");
+        const tx = txDoc.data()!;
+
+        const sellerDoc = await db.collection('users').doc(tx.seller_id).get();
+        if (!sellerDoc.exists) throw new Error("Seller not found");
+        const seller = sellerDoc.data()!;
+
+        if (!seller.stripe_connect_id || !seller.charges_enabled) {
+            throw new Error("Seller is not ready to receive payments.");
+        }
+
+        const itemDoc = await db.collection('items').doc(tx.item_id).get();
+        const item = itemDoc.data()!;
+        const amount = item.price;
+        const fee = Math.floor(amount * 0.1);
+
+        // [Beta Strategy] Check if Seller is Mock
+        const isMockSeller = seller.stripe_connect_id.startsWith('acct_mock_');
+
+        let paymentIntentData: any = {
+            amount: amount,
+            currency: 'jpy',
+            automatic_payment_methods: { enabled: true },
+            capture_method: 'manual', // <--- AUTH ONLY
+            metadata: {
+                transactionId: transactionId,
+                userId: userId,
+            },
+        };
+
+        if (isMockSeller) {
+            console.log(`[Beta] Payment for Mock Seller ${seller.stripe_connect_id}. Money held by Platform.`);
+            // DO NOT set transfer_data. Funds stay in Platform Account.
+        } else {
+            // Real Connect Logic
+            paymentIntentData.transfer_data = {
+                destination: seller.stripe_connect_id,
+            };
+            paymentIntentData.application_fee_amount = fee;
+        }
+
+        const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+
+        await db.collection("transactions").doc(transactionId).update({
+            payment_intent_id: paymentIntent.id,
+            updatedAt: admin.firestore.Timestamp.now()
+        });
+
+        return {
+            clientSecret: paymentIntent.client_secret,
+        };
+    } catch (error: any) {
+        console.error("Payment Intent Error:", error);
+        throw new functions.https.HttpsError('internal', error.message);
+    }
+});
+
 // [Phase 13] Capture Payment (QR Scan)
 export const capturePayment = functions.https.onCall(async (data, context) => {
     // 1. Auth Check (Must be logged in)
@@ -229,99 +300,7 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
     });
 });
 
-// [Phase 11] Create Payment Intent
-export const createPaymentIntent = functions.https.onCall(async (data, context) => {
-    // Auth Check
-    const userId = data.userId;
-    const transactionId = data.transactionId;
 
-    if (!userId || !transactionId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing userId or transactionId');
-    }
-
-    try {
-        // [Anti-Abuse] Rate Limit: 10 intents per hour
-        await checkRateLimit(userId, 'createPaymentIntent', 10, 3600);
-
-        // [Phase 13] Marketplace Logic: Auth Only + Connect Split
-        // 1. Get Seller's Connect ID
-        // Note: For MVP we might need to fetch seller from transactionId -> sellerId -> User
-        // But here we rely on the implementation plan which says "Reserve".
-        // We need to know the destination account to facilitate the split *at capture time* or *at intent creation*?
-        // With 'on_behalf_of' or 'transfer_data', we can define it now.
-        // Let's fetch the seller first.
-
-        const txDoc = await db.collection('transactions').doc(transactionId).get();
-        if (!txDoc.exists) throw new Error("Transaction not found");
-        const tx = txDoc.data()!;
-
-        const sellerDoc = await db.collection('users').doc(tx.seller_id).get();
-        if (!sellerDoc.exists) throw new Error("Seller not found");
-        const seller = sellerDoc.data()!;
-
-        if (!seller.stripe_connect_id || !seller.charges_enabled) {
-            throw new Error("Seller is not ready to receive payments.");
-        }
-
-        // Wait, price is usually on Item.
-        const itemDoc = await db.collection('items').doc(tx.item_id).get();
-        const item = itemDoc.data()!;
-        const amount = item.price;
-
-        // Fee Calculation (10%)
-        const fee = Math.floor(amount * 0.1);
-
-        // Mock for Local/Test Mode if key is missing
-        if (false) {
-            console.log("Using Mock Payment Intent for Dev Mode");
-            // Return a mock string that won't work with real Stripe.js but prevents 500 Internal Server Error.
-            // Actually, Stripe.js will fail if client_secret is invalid format.
-            // We should ideally use a real test key.
-            // But if user can't set it, we catch the error in UI or use a valid-looking mock?
-            // "pi_mock_12345_secret_mock_12345"
-            const mockId = "pi_mock_" + Date.now();
-
-            // Save mock ID to DB so next steps (QR capture etc) might work if mocked
-            await db.collection("transactions").doc(transactionId).update({
-                payment_intent_id: mockId,
-                updatedAt: admin.firestore.Timestamp.now()
-            });
-
-            return {
-                clientSecret: mockId + "_secret_mock_12345",
-            };
-        }
-
-        const paymentIntent = await stripe.paymentIntents.create({
-            amount: amount,
-            currency: 'jpy',
-            automatic_payment_methods: { enabled: true },
-            capture_method: 'manual', // <--- AUTH ONLY
-            transfer_data: {
-                destination: seller.stripe_connect_id, // Send to Seller
-            },
-            application_fee_amount: fee, // Platform Fee
-            metadata: {
-                transactionId: transactionId,
-                userId: userId,
-            },
-        });
-
-        // [Security Fix] Write Intent ID to Firestore (Admin SDK)
-        // This ensures the ID is authoritative and cannot be swapped by the client.
-        await db.collection("transactions").doc(transactionId).update({
-            payment_intent_id: paymentIntent.id,
-            updatedAt: admin.firestore.Timestamp.now()
-        });
-
-        return {
-            clientSecret: paymentIntent.client_secret,
-        };
-    } catch (error: any) {
-        console.error("Payment Intent Error:", error);
-        throw new functions.https.HttpsError('internal', error.message);
-    }
-});
 
 // [Pivot Implementation] Unlock via Client Call (Legacy/Immediate Feedback)
 export const unlockTransaction = functions.https.onCall(async (data, context) => {
@@ -347,7 +326,7 @@ export const unlockTransaction = functions.https.onCall(async (data, context) =>
                 // Let's keep it robust.
 
                 if ((paymentIntent.status === 'succeeded' || paymentIntent.status === 'requires_capture') && paymentIntent.metadata.transactionId === transactionId) {
-                    // CALL SHARED LOGIC
+                    // CALL SHARED logic
                     return processUnlock(transactionId, callerId, paymentIntentId, t);
                 } else {
                     throw new functions.https.HttpsError('permission-denied', 'Payment not successful or mismatched.');
@@ -458,52 +437,61 @@ export const createStripeConnectAccount = functions.https.onCall(async (data, co
         throw new functions.https.HttpsError('invalid-argument', 'Missing userId');
     }
 
-    try {
-        // Create Express Account
-        const account = await stripe.accounts.create({
-            type: 'express',
-            email: email,
-            capabilities: {
-                card_payments: { requested: true },
-                transfers: { requested: true },
-            },
-            metadata: { firebaseUID: userId }
-        });
+    // [Beta Test Strategy] Force Mock for EVERYONE
+    // Reason: User wants to skip Stripe KYC risk/hassle for beta testers (Sellers),
+    // but allow Real Payment UI for Buyers.
+    // Logic: 
+    // - Seller -> Mock Account (Skipped KYC) -> "Registration Complete"
+    // - Buyer -> Real Payment Intent -> Money goes to Platform Account (No Transfer)
+    const forceMock = true;
 
-        // Save to User Config
+    if (forceMock) {
+        console.log(`[Mock] Creating fake Connect account for ${userId} (Reason: Beta Strategy - Skip KYC)`);
+        const mockAccountId = `acct_mock_${userId}`;
+
         await db.collection('users').doc(userId).set({
-            stripe_connect_id: account.id
+            stripe_connect_id: mockAccountId,
+            charges_enabled: true // Auto-enable for demo
         }, { merge: true });
 
-        return { accountId: account.id };
-    } catch (error: any) {
-        console.error("Create Connect Account Error:", error);
-        throw new functions.https.HttpsError('internal', error.message);
+        return { accountId: mockAccountId };
     }
+
+    // Unreachable code removed for cleanup
 });
 
 export const createStripeAccountLink = functions.https.onCall(async (data, context) => {
     const accountId = data.accountId;
     const returnUrl = data.returnUrl || "https://musa-link.web.app/seller/payout/callback";
-    const refreshUrl = data.refreshUrl || "https://musa-link.web.app/seller/payout/refresh";
+    const userId = context.auth?.uid; // Securely get UID
 
     if (!accountId) {
         throw new functions.https.HttpsError('invalid-argument', 'Missing accountId');
     }
 
-    try {
-        const accountLink = await stripe.accountLinks.create({
-            account: accountId,
-            refresh_url: refreshUrl,
-            return_url: returnUrl,
-            type: 'account_onboarding',
-        });
-
-        return { url: accountLink.url };
-    } catch (error: any) {
-        console.error("Account Link Error:", error);
-        throw new functions.https.HttpsError('internal', error.message);
+    // [Mock] Guest Bypass & Beta Stratgy
+    if (accountId.startsWith('acct_mock_')) {
+        console.log(`[Mock] Generating fake account link for ${accountId}`);
+        return { url: returnUrl };
     }
+
+    // [Fix] Legacy Account Reset
+    // If user has a "Real" ID from previous attempt but we are now in "Force Mock" mode,
+    // we must RESET them to Mock to avoid the "internal" error loop.
+    if (userId) {
+        console.log(`[Fix] Resetting Legacy Account ${accountId} to Mock for ${userId}`);
+        const mockAccountId = `acct_mock_${userId}`;
+
+        await db.collection('users').doc(userId).set({
+            stripe_connect_id: mockAccountId,
+            charges_enabled: true
+        }, { merge: true });
+
+        // Return success immediately
+        return { url: returnUrl };
+    }
+
+    throw new functions.https.HttpsError('failed-precondition', 'Real onboarding disabled for beta. Please retry to auto-fix.');
 });
 
 // [New] Stripe Webhook
