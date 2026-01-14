@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation'; // [New]
+import { useAuth } from '@/contexts/AuthContext'; // [New]
 import { getDocs, collection, orderBy, query, limit, startAfter } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Transaction } from '@/types';
@@ -36,9 +38,33 @@ export default function AdminTransactionsPage() {
         setLoading(false);
     };
 
+    const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
+
+    // Admin Email List
+    const ADMIN_EMAILS = [
+        "admin@musashino-u.ac.jp",
+        "fumi_admin@musashino-u.ac.jp",
+        "s2527084@stu.musashino-u.ac.jp" // Your email for testing if needed, or remove for strictness
+    ];
+
+
+
     useEffect(() => {
+        if (authLoading) return;
+        if (!user) {
+            router.push('/');
+            return;
+        }
+        // Simple Admin Check
+        if (!ADMIN_EMAILS.includes(user.email || "")) {
+            alert("アクセス権限がありません");
+            router.push('/');
+            return;
+        }
+
         fetchTxs();
-    }, []);
+    }, [user, authLoading]);
 
     if (loading && transactions.length === 0) return <div className="p-8">読み込み中...</div>;
 

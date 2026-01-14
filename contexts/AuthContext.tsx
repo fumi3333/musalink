@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Safety timeout to prevent infinite loading
         const timeoutId = setTimeout(() => {
             setLoading(false);
-        }, 2000);
+        }, 500);
 
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             clearTimeout(timeoutId);
