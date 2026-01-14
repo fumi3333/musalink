@@ -76,6 +76,42 @@ export default function AdminTransactionsPage() {
                     <Code className="mr-2 h-4 w-4" /> Download CSV
                 </Button>
             </div>
+
+            {/* [New] Mini Dashboard for Beta Monitoring */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <Card>
+                    <CardContent className="p-4 flex flex-col items-center justify-center">
+                        <span className="text-xs text-slate-500 font-bold uppercase">Total Deals</span>
+                        <span className="text-2xl font-bold text-slate-800">{transactions.length}</span>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-4 flex flex-col items-center justify-center">
+                        <span className="text-xs text-slate-500 font-bold uppercase">Total Volume</span>
+                        <span className="text-2xl font-bold text-violet-600">
+                            ¥{transactions.reduce((sum, tx) => sum + ((tx.fee_amount || 0) * 10), 0).toLocaleString()}
+                        </span>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-4 flex flex-col items-center justify-center">
+                        <span className="text-xs text-slate-500 font-bold uppercase">Revenue (Fees)</span>
+                        <span className="text-2xl font-bold text-green-600">
+                            ¥{transactions.reduce((sum, tx) => sum + (tx.fee_amount || 0), 0).toLocaleString()}
+                        </span>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-4 flex flex-col items-center justify-center">
+                        <span className="text-xs text-slate-500 font-bold uppercase">Status</span>
+                        <span className="text-xs font-bold text-slate-700 mt-1">
+                            Comp: {transactions.filter(t => t.status === 'completed').length} /
+                            Pend: {transactions.filter(t => t.status === 'payment_pending').length}
+                        </span>
+                    </CardContent>
+                </Card>
+            </div>
+
             <div className="space-y-4">
                 {transactions.map(tx => (
                     <Card key={tx.id} className="border border-slate-200">
