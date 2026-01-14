@@ -5,9 +5,12 @@ export interface User {
     display_name: string;
     student_id?: string; // アンロックされるまでundefinedまたは隠蔽される
     university_email?: string; // アンロックされるまでundefinedまたは隠蔽される
-    grade?: string; // 学年 (e.g., 'B1', 'M1')
+    grade?: string | number; // 学年 (e.g., 'B1', 'M1' or 1, 2) [Expanded type]
     department?: string; // 学部学科 (e.g., '工学部数理工学科')
+    departmentId?: string; // [New] 学部コード (e.g., 'ECON_01')
     trust_score: number;
+    interests?: string[]; // [New] Zax統合用の興味タグ
+    responseTimeAvg?: number; // [New] 平均返信時間（秒）
     coin_balance: number; // 現在保有コイン
     locked_balance: number; // エスクロー中コイン
     is_verified?: boolean; // 学籍番号認証済み
@@ -22,6 +25,8 @@ export interface User {
 export interface Item {
     id: string;
     title: string;
+    market_price?: number; // [New] 市場価格 (Amazon中古など)
+    bookId?: string; // [New] 書籍ID (独自の管理ID)
     author?: string; // 著者名
     isbn?: string;   // ISBNコード
     lecture_name?: string; // [New]
@@ -40,8 +45,16 @@ export interface Item {
 export interface Transaction {
     id: string;
     item_id: string;
+    bookId?: string; // [New] 書籍ID
     buyer_id: string;
     seller_id: string;
+
+    // Analytics
+    isCrossDept?: boolean;        // [New] 学部を跨いだ取引か
+    savingAmount?: number;        // [New] 新品/市場価格との差額
+    matchingDuration?: number;    // [New] 出品から売れるまでの秒数
+    externalPriceDiff?: number;   // [New] Amazon中古より安かった額
+
     status: TransactionStatus;
     fee_amount: number; // 確定した手数料
     unlocked_assets?: {

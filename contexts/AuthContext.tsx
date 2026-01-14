@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 
 interface AuthContextType {
@@ -30,16 +30,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLoading(false);
         }, 2000);
 
-        // Check for persisted debug session
-        // Check for persisted debug session - REMOVED per user request to start fresh
-        // session persistence removed to ensure "start from logout" state.
-        const debugRole = null;
-        // if (debugRole) { ... } removed
-
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             clearTimeout(timeoutId);
             if (firebaseUser) {
-                // ... (existing logic)
                 setUser(firebaseUser);
 
                 // Handle Anonymous / Debug Users
@@ -67,15 +60,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         is_verified: true,
                         charges_enabled: true,
                         is_demo: true, // Flag for Rules
-                        coin_balance: 10000
+                        coin_balance: 10000,
+                        // Enhanced Profile Data
+                        departmentId: isBuyer ? 'Economics' : 'Law',
+                        grade: isBuyer ? 'B4' : 'B1', // s11(Old) vs s25(New)
+                        interests: ['Law', 'Economics']
                     });
                 } else {
                     // Real Google Users
                     try {
                         const userRef = doc(db, "users", firebaseUser.uid);
                         const userSnap = await getDoc(userRef);
+
                         if (userSnap.exists()) {
                             setUserData(userSnap.data());
+
+                            // [Data Strategy] Auto-populate Grade/Dept from Email if missing
+                            const data = userSnap.data();
+                            if (!data.grade || !data.departmentId) {
+                                const email = firebaseUser.email || "";
+                                const derivedGrade = calculateGrade(email);
+                                // Default Dept to 'Unknown' or try to guess? 'Unknown' for now.
+
+                                if (derivedGrade !== "Unknown") {
+                                    // Update Firestore
+                                    const updates = {
+                                        grade: data.grade || derivedGrade,
+                                        departmentId: data.departmentId || "Unknown", // Placeholder
+                                        email: email // Ensure email is synced
+                                    };
+
+                                    await setDoc(userRef, updates, { merge: true });
+
+                                    // Update State
+                                    setUserData({ ...data, ...updates });
+                                }
+                            }
+                        } else {
+                            // First time login or document missing?
+                            // Logic for creating user doc could go here if needed
                         }
                     } catch (e: any) {
                         console.warn("Fetch user data error:", e);
@@ -101,12 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await signInWithPopup(auth, provider);
             toast.success("ログインしました");
         } catch (e: any) {
-            // Suppress the configuration error to prevent red overlay if possible, or handle gracefully
             if (e.code === 'auth/configuration-not-found') {
                 const msg = "Googleログイン設定が有効になっていません (Firebase Console確認)";
-                console.warn(msg); // Warn instead of Error to avoid overlay? No, error still triggers.
+                console.warn(msg);
                 setError(msg);
-                // We do NOT re-throw here to prevent unhandled rejection/Next.js overlay
                 return;
             }
 
@@ -127,12 +148,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = async () => {
         try {
-            sessionStorage.removeItem('debug_user_role'); // Clear debug session
+            sessionStorage.removeItem('debug_user_role');
             await signOut(auth);
             setUser(null);
             setUserData(null);
             toast.success("ログアウトしました");
-            // Reload to clear any stale state
             window.location.reload();
         } catch (e: any) {
             toast.error("ログアウトエラー: " + e.message);
@@ -141,18 +161,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const debugLogin = async (role: 'seller' | 'buyer' = 'seller') => {
         try {
-            // Store preference BEFORE sign in to avoid race condition with onAuthStateChanged
             sessionStorage.setItem('debug_user_role', role);
-
-            // Use Anonymous Auth for Real Security Rules
             const { signInAnonymously } = await import('firebase/auth');
             await signInAnonymously(auth);
-
             toast.success(`テスト用アカウント(${role})でログインしました`);
-            // onAuthStateChanged will handle the rest
         } catch (e: any) {
             console.error("Debug Login Error", e);
-            sessionStorage.removeItem('debug_user_role'); // Clean up if failed
+            sessionStorage.removeItem('debug_user_role');
             toast.error("テストログインに失敗しました");
         }
     };
@@ -170,4 +185,32 @@ export function useAuth() {
         throw new Error("useAuth must be used within an AuthProvider");
     }
     return context;
+}
+
+// Helper: Extract Grade from Student ID in Email
+// Format: s25xxxx@... -> Entry 2025 -> Current 2026(Jan) -> Acad 2025 -> Grade 1
+function calculateGrade(email: string): string {
+    if (!email) return "Unknown";
+    const match = email.match(/^s(\d{2})/);
+    if (!match) return "Unknown";
+
+    // s25 -> 2025
+    const entryYearShort = parseInt(match[1]);
+    const entryYear = 2000 + entryYearShort;
+
+    const now = new Date();
+    let currentAcadYear = now.getFullYear();
+    // If before April, it's still the previous academic year
+    // e.g. Jan 2026 is still 2025 academic year
+    if (now.getMonth() < 3) { // 0=Jan, 1=Feb, 2=Mar
+        currentAcadYear -= 1;
+    }
+
+    const gradeNum = currentAcadYear - entryYear + 1;
+
+    if (gradeNum <= 1) return "B1";
+    if (gradeNum === 2) return "B2";
+    if (gradeNum === 3) return "B3";
+    if (gradeNum === 4) return "B4";
+    return "Other";
 }

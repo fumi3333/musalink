@@ -1,4 +1,33 @@
 {
-    "indexes": [],
+    "indexes": [
+        {
+            "collectionGroup": "transactions",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "logs",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "action",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "timestamp",
+                    "order": "ASCENDING"
+                }
+            ]
+        }
+    ],
     "fieldOverrides": []
 }

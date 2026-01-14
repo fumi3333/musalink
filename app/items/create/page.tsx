@@ -15,7 +15,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 export default function CreateListingPage() {
-    const { user, login } = useAuth();
+    const { user, userData: authUserData, login } = useAuth(); // Get userData from Context
     const [condition, setCondition] = useState<number>(3);
     const [loading, setLoading] = useState(false);
     const [searchingIsbn, setSearchingIsbn] = useState(false);
@@ -25,10 +25,6 @@ export default function CreateListingPage() {
     const [description, setDescription] = useState("");
     const [lectureName, setLectureName] = useState("");
     const [teacherName, setTeacherName] = useState("");
-
-    // User Profile inferred from Auth
-    // const [grade, setGrade] = useState("B1");
-    // const [department, setDepartment] = useState("工学部数理工学科");
 
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -45,6 +41,31 @@ export default function CreateListingPage() {
 
         // Additional checks for Verification / Payout
         async function checkUserData() {
+            // [Fix] Priority: Use AuthContext userData (Handles Guest/Demo logic)
+            if (authUserData) {
+                // Determine if Verified
+                if (!authUserData.is_verified) {
+                    setBlockingReason('unverified');
+                    setCurrentUser(authUserData);
+                    return;
+                }
+
+                // Determine if Payout Enabled
+                // Note: Guest users have charges_enabled = true
+                if (!authUserData.charges_enabled) {
+                    setBlockingReason('payout_missing');
+                    setCurrentUser(authUserData);
+                    return;
+                }
+
+                // All Good
+                setBlockingReason(null);
+                setCurrentUser(authUserData);
+                return;
+            }
+
+            // Fallback: Fetch from Firestore (if AuthContext hasn't loaded yet or for safety)
+            // ... (Existing logic kept as backup, though AuthContext should normally cover it)
             try {
                 const userRef = doc(db, "users", user!.uid);
                 let userDoc;
@@ -53,7 +74,6 @@ export default function CreateListingPage() {
                 } catch (e: any) {
                     if (e.code === 'unavailable' || e.message?.includes('offline')) {
                         console.warn("Firestore offline, skipping user check (Mocking Verified).");
-                        // Fallback: verification passed
                         setBlockingReason(null);
                         setCurrentUser({ id: user!.uid, email: user!.email, is_verified: true, charges_enabled: true });
                         return;
@@ -62,36 +82,36 @@ export default function CreateListingPage() {
                 }
 
                 if (userDoc && userDoc.exists()) {
-                    const userData = userDoc.data();
-
-                    // DEMO MODE BYPASS
-                    if (user!.email?.startsWith('s2527084')) {
-                        userData.is_verified = true;
-                        userData.charges_enabled = true;
-                    }
-
-                    if (!userData.is_verified) {
+                    const data = userDoc.data();
+                    if (!data.is_verified) {
                         setBlockingReason('unverified');
-                        setCurrentUser({ id: user!.uid, ...userData });
+                        setCurrentUser({ id: user!.uid, ...data });
                         return;
                     }
-                    if (!userData.charges_enabled) {
+                    if (!data.charges_enabled) {
                         setBlockingReason('payout_missing');
-                        setCurrentUser({ id: user!.uid, ...userData });
+                        setCurrentUser({ id: user!.uid, ...data });
+                        return;
+                    }
+                    setBlockingReason(null);
+                    setCurrentUser({ id: user!.uid, ...data });
+                } else {
+                    // Document missing, forcing verification
+                    // BUT check if it's an anonymous user who just hasn't generated userData yet?
+                    if (user!.isAnonymous) {
+                        // Should satisfy via authUserData usually, but just in case:
+                        setBlockingReason(null);
+                        setCurrentUser({ id: user!.uid, is_verified: true, charges_enabled: true, is_demo: true });
                         return;
                     }
 
-                    setBlockingReason(null);
-                    setCurrentUser({ id: user!.uid, ...userData });
-                } else {
-                    // User check fallback if doc doesn't exist
                     setBlockingReason('unverified');
                     setCurrentUser({ id: user!.uid, email: user!.email });
                 }
             } catch (e: any) {
                 console.error("Error checking user status:", e);
-                // Fallback for demo/debug: allow if mock
-                if (user!.email?.startsWith('s2527084')) {
+                // Last ditch fallback
+                if (user!.email?.startsWith('s2527084') || user!.isAnonymous) {
                     setBlockingReason(null);
                     setCurrentUser({ id: user!.uid, email: user!.email, is_verified: true, charges_enabled: true });
                 }
@@ -100,7 +120,7 @@ export default function CreateListingPage() {
 
         checkUserData();
 
-    }, [user, router]);
+    }, [user, authUserData, router]);
 
 
     const handleIsbnSearch = async () => {

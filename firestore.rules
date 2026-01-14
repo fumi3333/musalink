@@ -23,7 +23,9 @@ service cloud.firestore {
     // Items: Public Read, Seller Write
     match /items/{itemId} {
       allow read: if true;
-      allow create: if isAuthenticated() && request.resource.data.seller_id == request.auth.uid;
+      allow create: if isAuthenticated() 
+                    && request.resource.data.seller_id == request.auth.uid
+                    && request.resource.data.description.size() < 2000; // Anti-Abuse: Max 2000 chars
       allow update: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
     }
@@ -58,6 +60,17 @@ service cloud.firestore {
                         && request.resource.data.status == 'completed'
                       )
                     );
+    }
+
+    // Conversations & Messages (Chat)
+    match /conversations/{conversationId} {
+      allow read, write: if isAuthenticated(); // Refine if participants are checked in logic
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() 
+                      && request.resource.data.text.size() < 1000; // Anti-Abuse: Max 1000 chars
+      }
     }
   }
 }

@@ -30,8 +30,8 @@ export const logEvent = async (eventName: string, data: Record<string, any>) => 
  * 検索ログ（ヒットなし）
  * "Demand Mismatch" の証拠になる
  */
-export const logSearchMiss = (keyword: string, userId?: string) => {
-    logEvent('search_miss', { keyword, userId });
+export const logSearchMiss = (keyword: string, filters: any, userId?: string) => {
+    logEvent('search_miss', { keyword, filters, userId });
 };
 
 /**

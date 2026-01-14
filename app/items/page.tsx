@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Item } from '@/types';
 import { ItemCard } from '@/components/listing/ItemCard';
 import { Button } from '@/components/ui/button';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Search } from 'lucide-react';
 import Link from 'next/link';
 import { getItems } from '@/services/firestore';
 import {
@@ -14,6 +14,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 
 export default function ItemListView() {
     const [items, setItems] = useState<Item[]>([]);
@@ -21,11 +22,12 @@ export default function ItemListView() {
 
     const [department, setDepartment] = useState("all");
     const [grade, setGrade] = useState("all");
+    const [keyword, setKeyword] = useState("");
 
     const fetchItems = async () => {
         setLoading(true);
         try {
-            const data = await getItems({ department, grade });
+            const data = await getItems({ department, grade, keyword });
             setItems(data);
         } catch (e) {
             console.error(e);
@@ -36,28 +38,89 @@ export default function ItemListView() {
     };
 
     useEffect(() => {
+        // Debounce or just dependency? 
+        // For MVP, dependency is fine, but text input might flash.
+        // Let's use Enter key or Search button for keyword, but Filters auto-update.
+        // Actually, let's keep it simple: Filters trigger fetch, Keyword triggers on Search Button click.
+        // But here we put everything in useEffect? 
+        // No, let's remove keyword from useEffect dependency to avoid typing-lag, 
+        // and make Search Button trigger fetchItems.
+        // However, fetchItems uses the current state.
+        // If we want auto-search, add keyword to deps with debounce.
+        // For now: Only Filters trigger auto-fetch.
         fetchItems();
     }, [department, grade]);
+
+    const handleSearch = () => {
+        fetchItems();
+    };
 
     return (
         <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6">
             <div className="max-w-6xl mx-auto space-y-6">
 
                 {/* Header Area */}
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900">出品一覧</h1>
-                        <p className="text-slate-500 text-sm">現在販売中の教科書: {loading ? '...' : items.length}件</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" size="icon" onClick={fetchItems} disabled={loading}>
-                            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                        </Button>
+                <div className="flex flex-col gap-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-900">出品一覧</h1>
+                            <p className="text-slate-500 text-sm">現在販売中の教科書: {loading ? '...' : items.length}件</p>
+                        </div>
                         <Link href="/items/create">
                             <Button className="font-bold shadow-md bg-slate-900 text-white hover:bg-slate-800">
                                 <Plus className="mr-2 h-4 w-4" /> 教科書を出品
                             </Button>
                         </Link>
+                    </div>
+
+                    {/* Search & Filter Bar */}
+                    <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                        <div className="flex-1 flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                                <Input
+                                    placeholder="教科書名、著者名で検索..."
+                                    className="pl-9 bg-slate-50 border-slate-200"
+                                    value={keyword}
+                                    onChange={(e) => setKeyword(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                />
+                            </div>
+                            <Button onClick={handleSearch} disabled={loading}>
+                                検索
+                            </Button>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                            <Select value={department} onValueChange={setDepartment}>
+                                <SelectTrigger className="w-[140px]">
+                                    <SelectValue placeholder="学部" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">全学部</SelectItem>
+                                    <SelectItem value="Law">法学部</SelectItem>
+                                    <SelectItem value="Economics">経済学部</SelectItem>
+                                    <SelectItem value="Business">経営学部</SelectItem>
+                                    <SelectItem value="Literature">文学部</SelectItem>
+                                    <SelectItem value="Education">教育学部</SelectItem>
+                                    <SelectItem value="Global">グローバル</SelectItem>
+                                    <SelectItem value="DataScience">データサイエンス</SelectItem>
+                                    <SelectItem value="Engineering">工学部</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={grade} onValueChange={setGrade}>
+                                <SelectTrigger className="w-[100px]">
+                                    <SelectValue placeholder="学年" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">全学年</SelectItem>
+                                    <SelectItem value="B1">1年</SelectItem>
+                                    <SelectItem value="B2">2年</SelectItem>
+                                    <SelectItem value="B3">3年</SelectItem>
+                                    <SelectItem value="B4">4年</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </div>
 

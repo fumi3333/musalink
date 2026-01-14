@@ -77,13 +77,18 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
                     </h3>
                 </div>
 
-                {/* Seller Rating - [NEW] Add stars based on metadata */}
-                <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                    <div className="flex text-yellow-500">
-                        <Star className="h-3 w-3 fill-current" />
+                {/* Seller Rating - 5 Star Display */}
+                <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                    <div className="flex text-yellow-400">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                                key={star}
+                                className={`h-3 w-3 ${star <= (item.metadata?.seller_trust_score || 4.5) ? "fill-current" : "text-slate-200"}`}
+                            />
+                        ))}
                     </div>
-                    <span className="font-bold text-slate-700">{item.metadata?.seller_trust_score || 4.5}</span>
-                    <span>({item.metadata?.rating_count || 12})</span>
+                    <span className="font-bold text-slate-700 ml-1">{item.metadata?.seller_trust_score || 4.5}</span>
+                    <span className="text-slate-400">({item.metadata?.rating_count || 12})</span>
                 </div>
 
                 <div className="flex items-center justify-between">

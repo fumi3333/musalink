@@ -5,11 +5,13 @@ import Stripe from "stripe";
 // Debug Env
 // console.log("Stripe Key Configured:", !!functions.config().stripe);
 
-if (!functions.config().stripe || !functions.config().stripe.secret) {
+const config = functions.config() as any;
+
+if (!config.stripe || !config.stripe.secret) {
     console.warn("Stripe Config is missing! Run: firebase functions:config:set stripe.secret='sk_test_...'");
 }
 
-const stripe = new Stripe(functions.config().stripe ? functions.config().stripe.secret : "dummy_key_check_env", {
+const stripe = new Stripe(config.stripe ? config.stripe.secret : "dummy_key_check_env", {
     apiVersion: "2024-06-20" as any,
 });
 
@@ -238,6 +240,9 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
     }
 
     try {
+        // [Anti-Abuse] Rate Limit: 10 intents per hour
+        await checkRateLimit(userId, 'createPaymentIntent', 10, 3600);
+
         // [Phase 13] Marketplace Logic: Auth Only + Connect Split
         // 1. Get Seller's Connect ID
         // Note: For MVP we might need to fetch seller from transactionId -> sellerId -> User
@@ -369,6 +374,9 @@ export const rateUser = functions.https.onCall(async (data, context) => {
     const uid = context.auth.uid;
     const { transactionId, score } = data;
 
+    // [Anti-Abuse] Rate Limit: 30 ratings per hour (Should be enough for normal use)
+    await checkRateLimit(uid, 'rateUser', 30, 3600);
+
     if (!transactionId || !score || score < 1 || score > 5) {
         throw new functions.https.HttpsError('invalid-argument', 'Invalid score or ID');
     }
@@ -404,13 +412,29 @@ export const rateUser = functions.https.onCall(async (data, context) => {
         // 6. Update Target User & Transaction
         await db.runTransaction(async (t) => {
             const userRef = db.collection('users').doc(targetUserId);
+            const userDoc = await t.get(userRef);
 
-            // Increment logic for user
+            if (!userDoc.exists) {
+                // Should not happen for valid transaction, but handle safely
+                throw new functions.https.HttpsError('not-found', "User profile not found");
+            }
+
+            const userData = userDoc.data()!;
+            const currentRatings = userData.ratings || { count: 0, total_score: 0 };
+
+            const newCount = (currentRatings.count || 0) + 1;
+            const newTotal = (currentRatings.total_score || 0) + score;
+            // Calculate Trust Score (Simple Average 1-5)
+            // Can be enhanced later with weights (e.g. recent transactions matter more)
+            const newTrustScore = newTotal / newCount;
+
+            // Update User
             t.set(userRef, {
                 ratings: {
-                    count: admin.firestore.FieldValue.increment(1),
-                    total_score: admin.firestore.FieldValue.increment(score)
-                }
+                    count: newCount,
+                    total_score: newTotal
+                },
+                trustScore: newTrustScore
             }, { merge: true });
 
             // Mark transaction as rated
@@ -608,6 +632,33 @@ export const adminCancelTransaction = functions.https.onCall(async (data, contex
         throw new functions.https.HttpsError('internal', e.message);
     }
 });
+
+// [Anti-Abuse] Rate Limiter Helper
+async function checkRateLimit(userId: string, action: string, limit: number, windowSeconds: number) {
+    const now = admin.firestore.Timestamp.now();
+    const windowStart = new admin.firestore.Timestamp(now.seconds - windowSeconds, 0);
+
+    const logsRef = db.collection('user_limits').doc(userId).collection('logs');
+
+    // 1. Clean up old logs (Deferred or simple query?)
+    // For MVP active strict limit, we count documents in window.
+    // Index required: `userId` (parent) + `action` + `timestamp`
+    const q = logsRef
+        .where('action', '==', action)
+        .where('timestamp', '>', windowStart);
+
+    const snapshot = await q.get();
+
+    if (snapshot.size >= limit) {
+        throw new functions.https.HttpsError('resource-exhausted', `Rate limit exceeded for ${action}. Please try again later.`);
+    }
+
+    // 2. Add new log
+    await logsRef.add({
+        action: action,
+        timestamp: now
+    });
+}
 
 // [Phase 2] Notifications
 export * from "./notifications";

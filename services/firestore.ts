@@ -120,10 +120,14 @@ export const createItem = async (item: Omit<Item, 'id'>) => {
     }
 };
 
-export const getItems = async (filters?: { department?: string, grade?: string }): Promise<Item[]> => {
+export const getItems = async (filters?: { department?: string, grade?: string, keyword?: string }): Promise<Item[]> => {
     try {
         // Build constraints
-        // ... (constraints building)
+        // Listing中のアイテムのみ取得 (日時降順)
+        // Note: Firestore doesn't support full-text search easily.
+        // For MVP, we fetch matches by category then filter by keyword client-side.
+        // If the dataset grows, we need Algolia/typesense.
+
         const constraints: any[] = [where("status", "==", "listing")];
 
         if (filters?.department && filters.department !== "all") {
@@ -133,7 +137,6 @@ export const getItems = async (filters?: { department?: string, grade?: string }
             constraints.push(where("metadata.seller_grade", "==", filters.grade));
         }
 
-        // Listing中のアイテムのみ取得 (日時降順)
         const q = query(
             itemsRef,
             ...constraints
@@ -152,15 +155,33 @@ export const getItems = async (filters?: { department?: string, grade?: string }
             return MOCK_ITEMS;
         }
 
-        // [Analytics] Log Search Miss (Zero Results)
-        if (querySnapshot.empty) {
-            logSearchMiss("filter_search", `dept:${filters?.department || 'all'}_grade:${filters?.grade || 'all'}`);
-        }
-
-        return querySnapshot.docs.map(doc => ({
+        let results = querySnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as Item));
+
+        // Client-side Keyword Filter
+        if (filters?.keyword) {
+            const lowerKw = filters.keyword.toLowerCase();
+            results = results.filter(item =>
+                item.title.toLowerCase().includes(lowerKw) ||
+                (item.author && item.author.toLowerCase().includes(lowerKw))
+            );
+        }
+
+        // [Analytics] Log Search Miss (Zero Results)
+        if (results.length === 0) {
+            // Only log if meaningful search (filters or keyword exist)
+            const hasFilters = filters?.department !== "all" || filters?.grade !== "all" || !!filters?.keyword;
+
+            if (hasFilters) {
+                const logKw = filters?.keyword || "filter_only";
+                // Delay logging slightly to avoid blocking UI? No, it's async promise usually or fire-and-forget.
+                logSearchMiss(logKw, filters, "anonymous_or_context_user");
+            }
+        }
+
+        return results;
     } catch (error: any) {
         // ... (Offline handling)
         if (error.code === 'unavailable' || error.message?.includes('offline')) {

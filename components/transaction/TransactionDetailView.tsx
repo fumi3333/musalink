@@ -334,32 +334,25 @@ Musashino Linkで連絡先を確認しました。
                                                     key={score}
                                                     variant="outline"
                                                     size="icon"
-                                                    className="w-10 h-10 rounded-full border-yellow-400 hover:bg-yellow-100 text-yellow-500"
+                                                    className="w-10 h-10 rounded-full border-yellow-400 hover:bg-yellow-100 text-yellow-500 transition-all hover:scale-110"
                                                     onClick={async () => {
-                                                        const targetId = isBuyer ? seller.id : currentUser.id; // Corrected: isBuyer rates seller, isSeller rates buyer
-                                                        const targetRole = isBuyer ? 'seller' : 'buyer'; // The role of the person BEING rated? 
-                                                        // rateUser(targetUserId, txId, myRole, score)
-                                                        // My role is 'buyer', so I set buyer_rated = true.
-                                                        // Target is seller.
-                                                        // Correct.
-
                                                         const { rateUser } = await import('@/services/firestore');
                                                         const { toast } = require('sonner');
-
-                                                        // Determine TARGET ID (who is being rated)
                                                         const ratedUserId = isBuyer ? seller.id : transaction.buyer_id;
 
                                                         try {
                                                             await rateUser(ratedUserId, transaction.id, isBuyer ? 'buyer' : 'seller', score);
                                                             toast.success("評価を送信しました！");
-                                                            // Reload page or wait for optimistic update
                                                             window.location.reload();
                                                         } catch (e) {
                                                             toast.error("評価に失敗しました");
                                                         }
                                                     }}
                                                 >
-                                                    <span className="font-bold text-lg">{score}</span>
+                                                    {/* Show visual stars for input */}
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="font-bold text-lg leading-none">{score}</span>
+                                                    </div>
                                                 </Button>
                                             ))}
                                         </div>
