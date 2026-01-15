@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 import { Footer } from "@/components/layout/Footer";
+import { InAppBrowserGuard } from "@/components/layout/InAppBrowserGuard"; // [New]
 
 export const metadata: Metadata = {
   title: "Musashino Link",
@@ -36,7 +37,9 @@ export default function RootLayout({
         <AuthProvider>
           <Header />
           <main className="pt-16 min-h-[calc(100vh-100px)]">
-            {children}
+            <InAppBrowserGuard>
+              {children}
+            </InAppBrowserGuard>
           </main>
           <Footer />
           <Toaster richColors position="top-center" />
