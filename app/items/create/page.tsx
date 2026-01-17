@@ -279,48 +279,14 @@ export default function CreateListingPage() {
 
                             {/* User Profile inferred from Auth - Section Removed */}
 
-                            {/* Image Upload Section */}
+                            {/* [Optional] Image Upload Section - Hidden per user request 
                             <div className="space-y-2">
                                 <Label className="font-bold text-slate-700">商品写真 (任意・1枚のみ)</Label>
                                 <div className="flex items-center gap-4">
-                                    <div
-                                        className={`
-                                            relative w-24 h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-colors
-                                            ${imagePreview ? 'border-violet-500 bg-violet-50' : 'border-slate-300 hover:bg-slate-50 hover:border-slate-400'}
-                                        `}
-                                        onClick={() => !imagePreview && document.getElementById('image-upload')?.click()}
-                                    >
-                                        {imagePreview ? (
-                                            <>
-                                                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => { e.stopPropagation(); removeImage(); }}
-                                                    className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 hover:bg-black/70"
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Camera className="h-8 w-8 text-slate-400 mb-1" />
-                                                <span className="text-[10px] text-slate-500 font-bold">写真を追加</span>
-                                            </>
-                                        )}
-                                        <input
-                                            id="image-upload"
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={handleImageSelect}
-                                        />
-                                    </div>
-                                    <div className="text-xs text-slate-500 flex-1">
-                                        <p>・スマートフォンのカメラで撮影した写真をそのままアップロードできます。</p>
-                                        <p>・5MB以下の画像を選択してください。</p>
-                                    </div>
+                                ...
                                 </div>
                             </div>
+                            */}
 
 
                             <div className="space-y-2">
