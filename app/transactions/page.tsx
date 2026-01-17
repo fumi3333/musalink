@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Loader2, Package, RefreshCw } from 'lucide-react';
+import { getTransactionStatusLabel } from '@/lib/utils';
 
 export default function TransactionListPage() {
     const { user } = useAuth();
@@ -109,15 +110,15 @@ export default function TransactionListPage() {
                                             </span>
                                         </div>
                                         <h3 className="font-bold text-slate-800">
-                                            Transaction #{tx.id.substring(0, 6)}...
+                                            取引 #{tx.id.substring(0, 6)}...
                                         </h3>
                                         <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
-                                            Status:
+                                            ステータス:
                                             <span className={`font-mono px-2 py-0.5 rounded text-xs border ${tx.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
                                                 tx.status === 'payment_pending' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                                     'bg-slate-100'
                                                 }`}>
-                                                {tx.status}
+                                                {getTransactionStatusLabel(tx.status)}
                                             </span>
                                         </p>
                                     </CardContent>

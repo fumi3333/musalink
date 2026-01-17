@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Lock, Unlock, Copy, CheckCircle, AlertTriangle, Coins, ArrowRight, UserCheck } from 'lucide-react';
 import { RevealableContent } from './RevealableContent';
-import { calculateFee } from '@/lib/constants';
+import { calculateFee } from '@/lib/constants'; // Restored
 import { TransactionStepper } from './TransactionStepper';
 import { MeetingPlaceSelector } from './MeetingPlaceSelector';
+import { cn, getTransactionStatusLabel } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Elements } from '@stripe/react-stripe-js';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -68,11 +69,93 @@ Musashino Linkで連絡先を確認しました。
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Helper: Saves meeting place (Mock implementation for now, should update Firestore)
+    // Helper: Saves meeting place...
     const handleMeetingPlaceChange = (val: string) => {
         setMeetingPlace(val);
-        // Note: Real implementation would call updateTransaction(id, { meeting_place: val })
-        // For MVP, we presume local state is sufficient for greeting generation, or we rely on page refresh
+    };
+
+    // [Step 9678] QR Scanner Logic
+    const [isScanning, setIsScanning] = useState(false);
+
+    React.useEffect(() => {
+        if (!isScanning) return;
+
+        let scanner: any = null;
+
+        const initScanner = async () => {
+            try {
+                const { Html5QrcodeScanner } = await import('html5-qrcode');
+
+                // Initialize scanner (targetId: "reader")
+                scanner = new Html5QrcodeScanner(
+                    "reader",
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    /* verbose= */ false
+                );
+
+                scanner.render(async (decodedText: string) => {
+                    console.log("Scanned:", decodedText);
+
+                    // Validate ID
+                    if (decodedText === transaction.id) {
+                        scanner.clear();
+                        setIsScanning(false);
+                        toast.success("QRコードを読み取りました！");
+
+                        // Execute Capture Payment Flow
+                        await handleCapturePayment();
+                    } else {
+                        // Wrong QR Code
+                        toast.error("無効なQRコードです（取引IDが一致しません）");
+                    }
+                }, (error: any) => {
+                    // console.warn(error);
+                });
+            } catch (e) {
+                console.error("Scanner Init Error", e);
+                toast.error("カメラの起動に失敗しました");
+                setIsScanning(false);
+            }
+        };
+
+        // Small timeout to ensure DOM is ready
+        const timer = setTimeout(initScanner, 100);
+
+        return () => {
+            clearTimeout(timer);
+            if (scanner) {
+                scanner.clear().catch((err: any) => console.error("Failed to clear scanner", err));
+            }
+        };
+    }, [isScanning, transaction.id]);
+
+    // Extracted Capture Logic
+    const handleCapturePayment = async () => {
+        const { toast } = await import('sonner');
+
+        // [Robust Demo Check]
+        const isDemo = currentUser.is_demo === true ||
+            currentUser.university_email?.startsWith('s2527') ||
+            currentUser.university_email?.startsWith('s11111');
+
+        if (isDemo) {
+            toast.success("デモ決済: 受取完了");
+            onStatusChange('completed');
+            return;
+        }
+
+        const { httpsCallable } = await import('firebase/functions');
+        const { functions } = await import('@/lib/firebase');
+
+        toast.info("受取確認処理中...", { duration: 5000 });
+        try {
+            const captureFn = httpsCallable(functions, 'capturePayment');
+            await captureFn({ transactionId: transaction.id });
+            toast.success("受取完了！支払いを確定しました");
+            window.location.reload();
+        } catch (e: any) {
+            toast.error("通信エラーが発生しました (" + e.message + ")");
+        }
     };
 
     return (
@@ -103,7 +186,7 @@ Musashino Linkで連絡先を確認しました。
                                     className="w-full bg-violet-600 hover:bg-violet-700 font-bold"
                                     onClick={() => onStatusChange('approved')}
                                 >
-                                    承認する (Approve)
+                                    承認する
                                 </Button>
                                 <Button
                                     variant="outline"
@@ -234,41 +317,52 @@ Musashino Linkで連絡先を確認しました。
                                 {(isBuyer || (isBuyer && isSeller)) && (
                                     <div className="space-y-4">
                                         <p className="text-sm font-bold text-slate-500">【買い手】売り手のQRコードを読み取ってください</p>
-                                        <div className="w-48 h-48 bg-slate-100 mx-auto flex items-center justify-center border border-slate-300 rounded-lg">
-                                            <span className="text-slate-400 text-xs">Camera View (Mock)</span>
-                                        </div>
-                                        <Button
-                                            className="w-full bg-blue-600 hover:bg-blue-700 font-bold py-4 shadow-lg shadow-blue-200"
-                                            onClick={async () => {
-                                                const { toast } = await import('sonner');
-                                                // Check for Demo Mode (if currentUser is Debug User or Bypass Flag)
-                                                // We can infer demo mode if email matches debug pattern OR via explicit prop if we had one.
-                                                // Assuming Buyer is clicking this (currentUser == buyer).
-                                                const isDemo = currentUser.university_email?.startsWith('s2527') || currentUser.is_demo;
 
-                                                if (isDemo) {
-                                                    toast.success("デモ決済: バーコードを読み取りました");
-                                                    onStatusChange('completed'); // Call parent (which handles direct DB update)
-                                                    return;
-                                                }
+                                        {!isScanning ? (
+                                            <div className="space-y-4">
+                                                <div className="w-48 h-48 bg-slate-100 mx-auto flex items-center justify-center border border-slate-300 rounded-lg">
+                                                    <span className="text-slate-400 text-xs">カメラビュー (Mock)</span>
+                                                </div>
+                                                <Button
+                                                    className="w-full bg-blue-600 hover:bg-blue-700 font-bold py-4 shadow-lg shadow-blue-200"
+                                                    onClick={() => setIsScanning(true)}
+                                                >
+                                                    <span className="flex items-center gap-2">
+                                                        <CheckCircle className="w-5 h-5" />
+                                                        カメラを起動して読み取る
+                                                    </span>
+                                                </Button>
+                                                {/* Fallback/Demo Button kept for safety if camera fails */}
+                                                <button
+                                                    onClick={() => {
+                                                        const isDemo = currentUser.is_demo === true ||
+                                                            currentUser.university_email?.startsWith('s2527') ||
+                                                            currentUser.university_email?.startsWith('s11111');
 
-                                                const { httpsCallable } = await import('firebase/functions');
-                                                const { functions } = await import('@/lib/firebase');
-
-                                                toast.info("受取確認処理中...", { duration: 5000 });
-                                                try {
-                                                    const captureFn = httpsCallable(functions, 'capturePayment');
-                                                    await captureFn({ transactionId: transaction.id });
-                                                    toast.success("受取完了！支払いを確定しました");
-                                                    // Reload to show 'completed' state and rating UI
-                                                    window.location.reload();
-                                                } catch (e: any) {
-                                                    toast.error("通信エラーが発生しました。もう一度お試しください (" + e.message + ")");
-                                                }
-                                            }}
-                                        >
-                                            QRコードを読み取って受取完了 (Scan)
-                                        </Button>
+                                                        if (isDemo) {
+                                                            toast.success("デモ決済: バーコードを読み取りました");
+                                                            onStatusChange('completed');
+                                                            return;
+                                                        }
+                                                        toast.error("カメラを使用してください");
+                                                    }}
+                                                    className="text-xs text-slate-400 underline hover:text-slate-600"
+                                                >
+                                                    (デモ用: カメラが使えない場合はこちら)
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div id="reader" className="w-full max-w-sm mx-auto overflow-hidden rounded-lg border border-slate-300"></div>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full"
+                                                    onClick={() => setIsScanning(false)}
+                                                >
+                                                    キャンセル
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

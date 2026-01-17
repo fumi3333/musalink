@@ -1,3 +1,11 @@
+// ==========================================
+// ★本番リリース時の設定 (Production Config)
+// ==========================================
+// 本番運用（Stripe本番環境）に切り替える際は、以下の値を false に変更してください。
+// To switch to Production, change this to false.
+const ENABLE_MOCK_ACCOUNT_FLOW = true;
+// ==========================================
+
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
@@ -17,6 +25,97 @@ const stripe = new Stripe(config.stripe ? config.stripe.secret : "dummy_key_chec
 
 admin.initializeApp();
 const db = admin.firestore();
+
+// [New] Create Stripe Connect Account
+export const createStripeConnectAccount = functions.https.onCall(async (data: any, _context: functions.https.CallableContext) => {
+    const { userId } = data;
+
+    if (!userId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing userId');
+    }
+
+    // [Beta Test Strategy] Force Mock based on Config
+    if (ENABLE_MOCK_ACCOUNT_FLOW) {
+        console.log(`[Mock] Creating fake Connect account for ${userId} (Reason: ENABLE_MOCK_ACCOUNT_FLOW = true)`);
+        const mockAccountId = `acct_mock_${userId}`;
+
+        await db.collection('users').doc(userId).set({
+            stripe_connect_id: mockAccountId,
+            charges_enabled: true // Auto-enable for demo
+        }, { merge: true });
+
+        return { accountId: mockAccountId };
+    }
+
+    // [Production] Real Stripe Connect Account Creation
+    // Note: For Standard Connect, we typically create an Account Link directly?
+    // Or we create an account first.
+    // Standard Connect usually starts with OAuth or Account creation.
+    // For Express/Standard on-boarding:
+    try {
+        const account = await stripe.accounts.create({
+            type: 'standard', // or 'express'
+            country: 'JP',
+            email: data.email, // If passed
+        });
+
+        // Save real account ID
+        await db.collection('users').doc(userId).set({
+            stripe_connect_id: account.id,
+            charges_enabled: false // Waiting for onboarding
+        }, { merge: true });
+
+        return { accountId: account.id };
+    } catch (e: any) {
+        console.error("Stripe Account Create Error", e);
+        throw new functions.https.HttpsError('internal', e.message);
+    }
+});
+
+export const createStripeAccountLink = functions.https.onCall(async (data, context) => {
+    const accountId = data.accountId;
+    const returnUrl = data.returnUrl || "https://musa-link.web.app/seller/payout/callback";
+    const refreshUrl = data.refreshUrl || "https://musa-link.web.app/seller/payout"; // Needed for real link
+    const userId = context.auth?.uid; // Securely get UID
+
+    if (!accountId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing accountId');
+    }
+
+    // [Mock] Guest Bypass & Beta Stratgy
+    if (ENABLE_MOCK_ACCOUNT_FLOW && accountId.startsWith('acct_mock_')) {
+        console.log(`[Mock] Generating fake account link for ${accountId}`);
+        return { url: returnUrl };
+    }
+
+    // [Fix] Legacy Account Reset logic... (Keep existing reset logical if needed, or remove if confident)
+    // If strict production, we might skip the reset logic. 
+    // But for safety, let's keep the Mock Trap if ENABLE_MOCK is true.
+    if (ENABLE_MOCK_ACCOUNT_FLOW && userId) {
+        // ... (Existing Reset Logic)
+        console.log(`[Fix] Resetting Legacy Account ${accountId} to Mock for ${userId}`);
+        const mockAccountId = `acct_mock_${userId}`;
+        await db.collection('users').doc(userId).set({
+            stripe_connect_id: mockAccountId,
+            charges_enabled: true
+        }, { merge: true });
+        return { url: returnUrl };
+    }
+
+    // [Production] Real Account Link
+    try {
+        const accountLink = await stripe.accountLinks.create({
+            account: accountId,
+            refresh_url: refreshUrl,
+            return_url: returnUrl,
+            type: 'account_onboarding',
+        });
+        return { url: accountLink.url };
+    } catch (e: any) {
+        console.error("Stripe Account Link Error", e);
+        throw new functions.https.HttpsError('internal', e.message);
+    }
+});
 
 // 24時間反応がない取引を自動キャンセルする定時実行関数
 // 実行頻度: 60分ごと

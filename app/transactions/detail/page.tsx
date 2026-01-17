@@ -86,7 +86,10 @@ function TransactionDetailContent() {
         try {
             // DEMO MODE CHECK
             const currentUser = userData as User; // safe cast for now
-            const isDemoUser = currentUser?.university_email?.startsWith('s2527');
+            // [Fix] Robust Demo Check: Check flag OR known demo email patterns
+            const isDemoUser = currentUser?.is_demo === true ||
+                currentUser?.university_email?.startsWith('s2527') ||
+                currentUser?.university_email?.startsWith('s11111');
 
             if (newStatus === 'completed') {
                 if (isDemoUser) {
@@ -144,7 +147,7 @@ function TransactionDetailContent() {
     return (
         <div className="min-h-screen bg-slate-50 py-10 px-4">
             <div className="max-w-4xl mx-auto">
-                <h1 className="text-xl font-bold mb-6 text-slate-700">Transaction Details</h1>
+                <h1 className="text-xl font-bold mb-6 text-slate-700">取引詳細</h1>
                 <TransactionDetailView
                     transaction={transaction}
                     item={item}
