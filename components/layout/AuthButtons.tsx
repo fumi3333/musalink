@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 
 export const AuthButtons = () => {
-    const { user, login, logout, loading, error, debugLogin } = useAuth();
+    const { user, login, logout, loading, error, debugLogin, unreadNotifications } = useAuth();
     const [showErrorDialog, setShowErrorDialog] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
 
@@ -31,6 +31,7 @@ export const AuthButtons = () => {
     if (loading) return <div className="text-xs text-slate-400 px-2">Loading...</div>;
 
     if (!user) {
+        // ... (Guest Buttons kept same)
         return (
             <div className="flex gap-2">
                 <Button onClick={login} variant="default" size="sm" className="bg-violet-600 text-white font-bold">
@@ -89,6 +90,12 @@ export const AuthButtons = () => {
                     {isVerified && (
                         <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></span>
                     )}
+                    {/* Notification Badge */}
+                    {user && (unreadNotifications > 0) && (
+                        <span className="absolute -top-1 -left-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
+                            <span className="sr-only">New Notifications</span>
+                        </span>
+                    )}
                 </div>
             </Button>
 
@@ -105,15 +112,42 @@ export const AuthButtons = () => {
                                 <div className="flex items-center gap-2 mt-1">
                                     {isVerified ? (
                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                            ✅ 本人確認済み (学生)
+                                            ✅ 本人確認済み
                                         </span>
                                     ) : (
                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                                            未確認アカウント
+                                            未確認
                                         </span>
                                     )}
                                 </div>
                             </div>
+
+                            <Link
+                                href="/mypage"
+                                className="flex items-center gap-2 text-sm text-slate-700 font-bold hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
+                                onClick={() => setMenuOpen(false)}
+                            >
+                                <span className="text-lg">🏠</span>
+                                マイページ
+                            </Link>
+
+                            <Link
+                                href="/mypage?tab=purchase"
+                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
+                                onClick={() => setMenuOpen(false)}
+                            >
+                                <span className="text-lg">📦</span>
+                                取引一覧
+                            </Link>
+
+                            <Link
+                                href="/items/create"
+                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
+                                onClick={() => setMenuOpen(false)}
+                            >
+                                <span className="text-lg">📷</span>
+                                出品する
+                            </Link>
 
                             <Link
                                 href="/seller/payout"
@@ -124,18 +158,11 @@ export const AuthButtons = () => {
                                 売上・口座管理
                             </Link>
 
-                            <Link
-                                href="/items/create"
-                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
-                                onClick={() => setMenuOpen(false)}
-                            >
-                                <span className="text-lg">📝</span>
-                                出品する
-                            </Link>
-
-                            <Button variant="ghost" className="w-full justify-start text-red-500 text-xs h-8" onClick={() => logout()}>
-                                ログアウト
-                            </Button>
+                            <div className="border-t border-slate-100 pt-2">
+                                <Button variant="ghost" className="w-full justify-start text-red-500 text-xs h-8" onClick={() => logout()}>
+                                    ログアウト
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </>

@@ -15,9 +15,7 @@ export function Footer() {
                     <Link href="/legal/trade" className="hover:text-purple-600 transition-colors">
                         特定商取引法に基づく表記
                     </Link>
-                    <a href="https://github.com/fumi3333/Musa-lo" target="_blank" rel="noopener noreferrer" className="hover:text-purple-600 transition-colors">
-                        GitHub
-                    </a>
+
                 </div>
                 <div>
                     &copy; 2026 Musashino Link Project

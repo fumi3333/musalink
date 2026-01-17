@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import {
     collection,
     addDoc,
@@ -345,6 +345,77 @@ export const getUser = async (userId: string): Promise<User> => {
         coin_balance: 1000,
         locked_balance: 0,
         student_id: userId === 'user_001' ? 's1234567' : undefined,
-        university_email: userId === 'user_001' ? 's1234567@musashino-u.ac.jp' : undefined
+        university_email: userId === 'user_001' ? 's1234567@musashino-u.ac.jp' : undefined,
+        is_demo: userId !== 'user_001' // Guest is demo
     };
 }
+// --- MyPage / Dashboard Services ---
+
+export const getMyItems = async (userId: string): Promise<Item[]> => {
+    try {
+        const q = query(
+            itemsRef,
+            where("seller_id", "==", userId)
+            // orderBy("createdAt", "desc") // Requires Index
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Item));
+    } catch (e: any) {
+        if (e.code === 'unavailable' || e.message?.includes('offline')) return []; // Fail gracefully
+        console.error("Error fetching my items:", e);
+        return [];
+    }
+};
+
+export const getMyTransactions = async (userId: string): Promise<Transaction[]> => {
+    try {
+        // Firestore OR queries are restricted (requires composite index sometimes), so we split or use simple OR if supported.
+        // Actually, 'where' with 'in' doesn't checking two fields.
+        // We need two queries: As Buyer AND As Seller.
+        const [buyerQ, sellerQ] = await Promise.all([
+            getDocs(query(transactionsRef, where("buyer_id", "==", userId))),
+            getDocs(query(transactionsRef, where("seller_id", "==", userId)))
+        ]);
+
+        const buyerTx = buyerQ.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+        const sellerTx = sellerQ.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+
+        // Merge and Dedupe (unlikely to have dups unless self-trade, but ok)
+        const all = [...buyerTx, ...sellerTx];
+        // Sort manually by date desc (since we can't easy orderBy across two queries without logic)
+        return all.sort((a, b) => {
+            const tA = (a.createdAt as any)?.toMillis?.() || 0;
+            const tB = (b.createdAt as any)?.toMillis?.() || 0;
+            return tB - tA;
+        });
+    } catch (e: any) {
+        console.error("Error fetching my transactions:", e);
+        return [];
+    }
+};
+
+// --- Safety & Reporting ---
+
+export const reportIssue = async (type: 'user' | 'item' | 'transaction', targetId: string, reason: string, description: string) => {
+    try {
+        const reportRef = collection(db, "reports");
+        const user = auth.currentUser;
+        await addDoc(reportRef, {
+            type,
+            targetId,
+            reason,
+            description,
+            reporterId: user ? user.uid : 'anonymous',
+            createdAt: serverTimestamp(),
+            status: 'open'
+        });
+        console.log("Report submitted successfully");
+    } catch (e) {
+        console.error("Error submitting report", e);
+        throw e;
+    }
+};
+
+// --- Rating ---
+// rateUser is already defined above.
+

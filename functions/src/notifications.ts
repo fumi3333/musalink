@@ -2,98 +2,130 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
 
-// Configure Transport (Requires "mail.email" and "mail.password" to be set via CLI)
-// firebase functions:config:set mail.email="your-email@gmail.com" mail.password="app-password"
+const db = admin.firestore();
+
+// 1. Configure Transport
+// We use functions.config() to store sensitive credentials safely.
+// Run: firebase functions:config:set gmail.email="your@gmail.com" gmail.password="app-password"
+const gmailEmail = functions.config().gmail?.email;
+const gmailPassword = functions.config().gmail?.password;
+
 const mailTransport = nodemailer.createTransport({
     service: "gmail",
     auth: {
-        user: functions.config().mail ? functions.config().mail.email : "mock_email@gmail.com",
-        pass: functions.config().mail ? functions.config().mail.password : "mock_password",
+        user: gmailEmail,
+        pass: gmailPassword,
     },
 });
 
-const APP_NAME = "Musashino Link";
-
 // Helper: Send Email
-async function sendEmail(to: string, subject: string, text: string) {
-    if (!functions.config().mail) {
-        console.log(`[MOCK EMAIL] To: ${to}, Subject: ${subject}, Body: ${text}`);
+async function sendEmail(to: string, subject: string, text: string, html?: string) {
+    if (!gmailEmail || !gmailPassword) {
+        console.warn("Skipping Email: 'gmail.email' or 'gmail.password' config is missing.");
         return;
     }
 
     const mailOptions = {
-        from: `${APP_NAME} <noreply@firebase.com>`,
+        from: `"Musashino Link" <${gmailEmail}>`,
         to: to,
         subject: subject,
         text: text,
+        html: html || text.replace(/\n/g, '<br>')
     };
 
     try {
         await mailTransport.sendMail(mailOptions);
         console.log(`Email sent to ${to}`);
     } catch (error) {
-        console.error("Error sending email:", error);
+        console.error("Email send failed:", error);
     }
 }
 
-// Trigger: Notify Seller on Buying Request
-export const notifyOnRequestCreated = functions.firestore
-    .document("transactions/{transactionId}")
-    .onCreate(async (snap, context) => {
+// Top Level Export
+// 1. On Transaction Created -> Notify Seller
+export const onTransactionCreated = functions.firestore
+    .document('transactions/{transactionId}')
+    .onCreate(async (snap: functions.firestore.QueryDocumentSnapshot, context: functions.EventContext) => {
         const tx = snap.data();
-        if (tx.status !== "request_sent") return;
-
-        // Get Seller Email
         const sellerId = tx.seller_id;
-        const sellerDoc = await admin.firestore().collection("users").doc(sellerId).get();
-        const seller = sellerDoc.data();
+        // const buyerId = tx.buyer_id; // Unused for now
 
-        if (!seller || !seller.university_email) {
-            console.log("Seller email not found, skipping notification.");
+        // Fetch Seller Email
+        const sellerDoc = await db.collection("users").doc(sellerId).get();
+        if (!sellerDoc.exists) return;
+        const seller = sellerDoc.data()!;
+        const sellerEmail = seller.university_email || seller.email;
+
+        if (!sellerEmail) {
+            console.log(`Seller ${sellerId} has no email, skipping notification.`);
             return;
         }
 
-        // Get Item Name
-        const itemDoc = await admin.firestore().collection("items").doc(tx.item_id).get();
-        const item = itemDoc.data();
-        const itemName = item ? item.title : "商品";
+        // Fetch Item Title
+        const itemDoc = await db.collection("items").doc(tx.item_id).get();
+        const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
-        const subject = `【${APP_NAME}】出品した商品にリクエストが届きました！`;
-        const body = `${seller.display_name} さん\n\n` +
-            `あなたの出品「${itemName}」に購入リクエストが届きました。\n` +
-            `アプリを開いて、取引画面から承認してください。\n\n` +
-            `アプリを開く: https://musalink.vercel.app/transactions`;
+        const subject = `【Musashino Link】商品「${itemTitle}」が購入されました！`;
+        const text = `${seller.display_name}様\n\nあなたの出品した「${itemTitle}」に購入リクエストが入りました！\n\nアプリを開いて確認・承認してください。\nhttps://musa-link.web.app/transactions/detail?id=${context.params.transactionId}`;
 
-        await sendEmail(seller.university_email, subject, body);
+        // 1. Create In-App Notification
+        await db.collection("users").doc(sellerId).collection("notifications").add({
+            type: "transaction_created",
+            title: "商品が購入されました",
+            body: itemTitle,
+            link: `/transactions/detail?id=${context.params.transactionId}`,
+            createdAt: admin.firestore.Timestamp.now(),
+            read: false
+        });
+
+        // 2. Send Email
+        await sendEmail(sellerEmail, subject, text);
     });
 
-// Trigger: Notify on New Chat Message
-export const notifyOnMessageCreated = functions.firestore
-    .document("conversations/{conversationId}/messages/{messageId}")
-    .onCreate(async (snap, context) => {
-        const message = snap.data();
+// 2. On Message Created -> Notify Recipient
+export const onMessageCreated = functions.firestore
+    .document('conversations/{conversationId}/messages/{messageId}')
+    .onCreate(async (snap: functions.firestore.QueryDocumentSnapshot, context: functions.EventContext) => {
+        const msg = snap.data();
+        const senderId = msg.senderId;
         const conversationId = context.params.conversationId;
 
-        // Get Conversation to find participants
-        const convDoc = await admin.firestore().collection("conversations").doc(conversationId).get();
-        const conversation = convDoc.data();
+        // Fetch Conversation to find Participants
+        const convDoc = await db.collection("conversations").doc(conversationId).get();
+        if (!convDoc.exists) return; // Should not happen
+        const conv = convDoc.data()!;
 
-        if (!conversation) return;
+        // Determine Recipient
+        // conv.participants is array [uid1, uid2]
+        const participants = conv.participants || [];
+        const recipientId = participants.find((uid: string) => uid !== senderId);
 
-        // Determine Recipient (The one who didn't send the message)
-        const recipientId = conversation.participants.find((uid: string) => uid !== message.senderId);
         if (!recipientId) return;
 
-        const recipientDoc = await admin.firestore().collection("users").doc(recipientId).get();
-        const recipient = recipientDoc.data();
+        // Fetch Recipient Email
+        const recipientDoc = await db.collection("users").doc(recipientId).get();
+        if (!recipientDoc.exists) return;
+        const recipient = recipientDoc.data()!;
+        const recipientEmail = recipient.university_email || recipient.email;
 
-        if (!recipient || !recipient.university_email) return;
+        // Rate Limit / Spam Prevention Logic?
+        // Check local "Do Not Disturb"? (Skipped for MVP)
 
-        const subject = `【${APP_NAME}】新着メッセージがあります`;
-        const body = `${recipient.display_name} さん\n\n` +
-            `取引相手から新しいメッセージが届きました。\n\n` +
-            `"${message.text}"\n\n` +
-            `返信する: https://musalink.vercel.app/transactions`;
+        const subject = `【Musashino Link】新着メッセージが届きました`;
+        const text = `${recipient.display_name}様\n\n取引相手からメッセージが届きました。\n\n「${msg.text.substring(0, 50)}${msg.text.length > 50 ? '...' : ''}」\n\n返信はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${conversationId}#chat`;
 
-        await sendEmail(recipient.university_email, subject, body);
+        // 1. Create In-App Notification
+        await db.collection("users").doc(recipientId).collection("notifications").add({
+            type: "message_received",
+            title: "新着メッセージ",
+            body: msg.text.substring(0, 30),
+            link: `/transactions/detail?id=${conversationId}#chat`,
+            createdAt: admin.firestore.Timestamp.now(),
+            read: false
+        });
+
+        // 2. Send Email
+        if (recipientEmail) {
+            await sendEmail(recipientEmail, subject, text);
+        }
     });

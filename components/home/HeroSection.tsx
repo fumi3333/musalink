@@ -29,10 +29,10 @@ export const HeroSection = () => {
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                    <Button asChild size="lg" className="w-full sm:w-auto h-14 px-8 text-lg font-bold bg-white text-slate-900 hover:bg-slate-100 rounded-full shadow-lg shadow-white/10 transition-all hover:scale-105">
+                    <Button asChild size="lg" className="relative z-20 w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white font-bold px-8 py-6 text-lg shadow-lg hover:translate-y-[-2px] transition-all">
                         <Link href="/items">
-                            <Search className="mr-2 h-5 w-5" />
-                            出品を探す
+                            <Search className="w-5 h-5 mr-2" />
+                            教科書を探す
                         </Link>
                     </Button>
                     <Button asChild size="lg" variant="outline" className="w-full sm:w-auto h-14 px-8 text-lg font-bold border-white/30 text-white hover:bg-white/10 rounded-full backdrop-blur-sm transition-all hover:scale-105 bg-black/40">

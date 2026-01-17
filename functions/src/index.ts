@@ -252,10 +252,10 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
         if (!txDoc.exists) throw new functions.https.HttpsError('not-found', "Transaction not found");
         const tx = txDoc.data()!;
 
-        // 2. Authorization Check (Seller Only)
-        // Only the seller can scan the buyer's QR to capture funds.
-        if (tx.seller_id !== callerId) {
-            throw new functions.https.HttpsError('permission-denied', "Only the seller can capture this payment.");
+        // 2. Authorization Check (Buyer Only - Inverted Flow)
+        // The Buyer scans the Seller's QR to confirm receipt and trigger the payment capture.
+        if (tx.buyer_id !== callerId) {
+            throw new functions.https.HttpsError('permission-denied', "Only the buyer can capture/confirm receipt.");
         }
 
         // Check if status is payment_pending (Auth done)
@@ -430,8 +430,8 @@ export const rateUser = functions.https.onCall(async (data, context) => {
 });
 
 // [New] Create Stripe Connect Account
-export const createStripeConnectAccount = functions.https.onCall(async (data, context) => {
-    const { userId, email } = data;
+export const createStripeConnectAccount = functions.https.onCall(async (data: any, _context: functions.https.CallableContext) => {
+    const { userId } = data;
 
     if (!userId) {
         throw new functions.https.HttpsError('invalid-argument', 'Missing userId');
@@ -458,6 +458,7 @@ export const createStripeConnectAccount = functions.https.onCall(async (data, co
     }
 
     // Unreachable code removed for cleanup
+    return null;
 });
 
 export const createStripeAccountLink = functions.https.onCall(async (data, context) => {

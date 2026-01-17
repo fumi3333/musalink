@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 
 interface AuthContextType {
@@ -11,6 +11,7 @@ interface AuthContextType {
     userData: any | null;
     loading: boolean;
     error: string | null;
+    unreadNotifications: number;
     login: () => Promise<void>;
     logout: () => Promise<void>;
     debugLogin: (role?: 'seller' | 'buyer') => Promise<void>;
@@ -37,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 // Handle Anonymous / Debug Users
                 if (firebaseUser.isAnonymous) {
-                    const debugRole = sessionStorage.getItem('debug_user_role');
+                    const debugRole = localStorage.getItem('debug_user_role');
 
                     // Fix: If no debug role is set in session (e.g. fresh load), 
                     // but we have an anonymous user, force logout to ensure clean start.
@@ -117,6 +118,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    // --- Notifications Listener ---
+    const [unreadNotifications, setUnreadNotifications] = useState(0);
+    useEffect(() => {
+        if (!user) {
+            setUnreadNotifications(0);
+            return;
+        }
+
+        const q = query(collection(db, `users/${user.uid}/notifications`), where("read", "==", false));
+
+        const unsub = onSnapshot(q, (snapshot: any) => {
+            setUnreadNotifications(snapshot.docs.length);
+        });
+        return () => unsub();
+    }, [user]);
+
     const login = async () => {
         setError(null);
         try {
@@ -148,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = async () => {
         try {
-            sessionStorage.removeItem('debug_user_role');
+            localStorage.removeItem('debug_user_role');
             await signOut(auth);
             setUser(null);
             setUserData(null);
@@ -161,19 +178,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const debugLogin = async (role: 'seller' | 'buyer' = 'seller') => {
         try {
-            sessionStorage.setItem('debug_user_role', role);
+            localStorage.setItem('debug_user_role', role);
             const { signInAnonymously } = await import('firebase/auth');
             await signInAnonymously(auth);
             toast.success(`テスト用アカウント(${role})でログインしました`);
         } catch (e: any) {
             console.error("Debug Login Error", e);
-            sessionStorage.removeItem('debug_user_role');
+            localStorage.removeItem('debug_user_role');
             toast.error("テストログインに失敗しました");
         }
     };
 
     return (
-        <AuthContext.Provider value={{ user, userData, loading, error, login, logout, debugLogin }}>
+        <AuthContext.Provider value={{ user, userData, loading, error, unreadNotifications, login, logout, debugLogin }}>
             {children}
         </AuthContext.Provider>
     );

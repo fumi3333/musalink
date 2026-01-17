@@ -12,21 +12,40 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Helper: Enforce University Email (or specific Demo/Admin accounts)
+    function isVerifiedStudent() {
+       return isAuthenticated() && (
+         request.auth.token.email.matches('.*@stu.musashino-u.ac.jp') ||
+         request.auth.token.email.matches('.*@musashino-u.ac.jp') ||
+         request.auth.token.email == 'demo@musashino-u.ac.jp' ||
+         // Allow anonymous auth for Guest Debug mode (identified by provider)
+         // Note: Anonymous auth has no email usually. 
+         // If we rely on is_demo flag in user doc, we trust the client too much for creation?
+         // For now, allow if firebase.sign_in_provider is 'anonymous'
+         request.auth.token.firebase.sign_in_provider == 'anonymous'
+       );
+    }
+
     // Users: Public Read (Profiles), Owner Write
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false; // Admin only
+
+      // Notifications Subcollection
+      match /notifications/{notificationId} {
+          allow read, write: if isOwner(userId);
+      }
     }
 
     // Items: Public Read, Seller Write
     match /items/{itemId} {
       allow read: if true;
-      allow create: if isAuthenticated() 
+      allow create: if isVerifiedStudent() 
                     && request.resource.data.seller_id == request.auth.uid
                     && request.resource.data.description.size() < 2000; // Anti-Abuse: Max 2000 chars
-      allow update: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
+      allow update: if isAuthenticated(); // DEBUG: Permissive update for beta test
       allow delete: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
     }
 
@@ -36,10 +55,10 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (resource.data.buyer_id == request.auth.uid || resource.data.seller_id == request.auth.uid);
       
       // Create: Buyer only (must match auth uid)
-      allow create: if isAuthenticated() && request.resource.data.buyer_id == request.auth.uid;
+      allow create: if isVerifiedStudent() && request.resource.data.buyer_id == request.auth.uid;
       
       // Update: Buyer or Seller, BUT Restricted Status Changes
-      allow update: if isAuthenticated() 
+      allow update: if isVerifiedStudent() 
                     && (resource.data.buyer_id == request.auth.uid || resource.data.seller_id == request.auth.uid)
                     && (
                       // 1. Allow non-status updates (or same status) - e.g. meeting place
@@ -67,10 +86,22 @@ service cloud.firestore {
       allow read, write: if isAuthenticated(); // Refine if participants are checked in logic
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated() 
+        allow read: if isAuthenticated(); // Read allows any auth (so support can see?) - keep loose for now or tighten
+        allow create: if isVerifiedStudent() 
                       && request.resource.data.text.size() < 1000; // Anti-Abuse: Max 1000 chars
       }
+    }
+    // Payout Requests
+    match /payout_requests/{requestId} {
+      allow read: if isOwner(requestId) || request.auth.token.admin == true; // Admin or Owner
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if false; // Immutable once requested
+    }
+
+    // Reports
+    match /reports/{reportId} {
+        allow create: if isAuthenticated();
+        allow read: if request.auth.token.admin == true;
     }
   }
 }

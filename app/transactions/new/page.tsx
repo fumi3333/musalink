@@ -7,6 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Item } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertTriangle } from 'lucide-react';
 
 function NewTransactionContent() {
     const router = useRouter();
@@ -49,7 +51,7 @@ function NewTransactionContent() {
             router.push(`/transactions/detail?id=${transactionId}`);
         } catch (e) {
             console.error(e);
-            alert("取引の開始に失敗しました");
+            alert("取引の開始に失敗しました: " + ((e as any).message || "Unknown error"));
         } finally {
             setCreating(false);
         }
@@ -72,7 +74,7 @@ function NewTransactionContent() {
                     </div>
 
                     {/* [Self-Trading Block] */}
-                    {userData?.id === item.seller_id ? (
+                    {userData?.id === item.seller_id && !userData?.is_demo ? (
                         <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm font-bold border border-red-200">
                             自分の商品は購入できません
                         </div>
@@ -111,6 +113,46 @@ function NewTransactionContent() {
                                 >
                                     {creating ? '処理中...' : '取引開始'}
                                 </Button>
+                            </div>
+
+                            {/* Report Button */}
+                            <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+                                <Dialog>
+                                    <DialogTrigger asChild>
+                                        <button className="text-xs text-slate-400 hover:text-red-500 flex items-center justify-center gap-1 w-full">
+                                            <AlertTriangle className="h-3 w-3" /> 問題を報告する
+                                        </button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>問題を報告</DialogTitle>
+                                            <DialogDescription>
+                                                不適切な商品やユーザーについて報告します。
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                            <textarea
+                                                id="report-reason-preview"
+                                                className="flex min-h-[80px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                                                placeholder="問題の詳細を入力してください"
+                                            />
+                                            <Button onClick={async () => {
+                                                const reasonEl = document.getElementById('report-reason-preview') as HTMLTextAreaElement;
+                                                if (!reasonEl.value) return;
+                                                try {
+                                                    const { reportIssue } = await import('@/services/firestore');
+                                                    await reportIssue('item', item.id, 'inappropriate_content', reasonEl.value); // Report Item
+                                                    const { toast } = await import('sonner');
+                                                    toast.success("報告を受け付けました");
+                                                } catch (e) {
+                                                    console.error(e);
+                                                }
+                                            }} className="bg-red-600 hover:bg-red-700 text-white w-full">
+                                                送信する
+                                            </Button>
+                                        </div>
+                                    </DialogContent>
+                                </Dialog>
                             </div>
                         </>
                     )}

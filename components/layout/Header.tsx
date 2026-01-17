@@ -31,12 +31,6 @@ export const Header = () => {
                     <Link href="/items" className="text-sm font-medium text-slate-600 hover:text-violet-600 transition-colors">
                         探す
                     </Link>
-                    <Link href="/items/create" className="text-sm font-medium text-slate-600 hover:text-violet-600 transition-colors">
-                        出品する
-                    </Link>
-                    <Link href="/transactions" className="text-sm font-medium text-slate-600 hover:text-violet-600 transition-colors">
-                        取引一覧
-                    </Link>
                 </nav>
 
                 {/* Actions & Mobile Menu Toggle */}
@@ -83,15 +77,15 @@ export const Header = () => {
                         <PlusCircle className="w-5 h-5 text-violet-600" />
                         出品する
                     </Link>
-                    <div className="border-t border-slate-100 pt-2">
-                        <Link
-                            href="/admin"
-                            className="flex items-center gap-3 p-3 text-xs text-slate-400"
-                            onClick={() => setIsMenuOpen(false)}
-                        >
-                            管理画面 (Admin)
-                        </Link>
-                    </div>
+                    <Link
+                        href="/mypage"
+                        className="flex items-center gap-3 p-3 rounded-md hover:bg-slate-50 text-slate-700 font-bold"
+                        onClick={() => setIsMenuOpen(false)}
+                    >
+                        <User className="w-5 h-5 text-violet-600" />
+                        マイページ
+                    </Link>
+
                 </div>
             )}
         </header>

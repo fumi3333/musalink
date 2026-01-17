@@ -11,10 +11,9 @@ export default function TradePage() {
                 <div className="md:col-span-2">Musashino Link</div>
 
                 <div className="font-bold text-slate-700">運営者</div>
-                <div className="md:col-span-2">Musashino Link プロジェクトチーム (CS学部 学生有志)</div>
+                <div className="md:col-span-2">Musashino Link 運営 (武蔵野大学 経済学部 学生個人開発)</div>
 
-                <div className="font-bold text-slate-700">所在地</div>
-                <div className="md:col-span-2">東京都江東区有明3-3-3 武蔵野大学 有明キャンパス</div>
+
 
                 <div className="font-bold text-slate-700">連絡先</div>
                 <div className="md:col-span-2">support@musashino-link-demo.com (Demo)</div>

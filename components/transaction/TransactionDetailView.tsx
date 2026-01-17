@@ -1,6 +1,8 @@
+
 "use client";
 
 import React, { useState } from 'react';
+import QRCode from 'react-qr-code';
 import { Item, Transaction, TransactionStatus, User } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +14,7 @@ import { TransactionStepper } from './TransactionStepper';
 import { MeetingPlaceSelector } from './MeetingPlaceSelector';
 import { toast } from 'sonner';
 import { Elements } from '@stripe/react-stripe-js';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { stripePromise } from '@/lib/stripe';
 import StripePaymentForm from './StripePaymentForm';
 import { httpsCallable } from 'firebase/functions';
@@ -135,6 +138,7 @@ Musashino Linkで連絡先を確認しました。
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
+                        {/* Hybrid View: Show Buyer Logic if Buyer OR Self-Trade */}
                         {isBuyer ? (
                             <>
                                 <p className="mb-4 text-slate-600">
@@ -214,17 +218,22 @@ Musashino Linkで連絡先を確認しました。
 
                         <div className="text-center space-y-4">
                             <div className="bg-white p-6 rounded-xl border-2 border-dashed border-blue-300 inline-block w-full max-w-sm">
-                                {isBuyer ? (
-                                    <div className="space-y-4">
-                                        <p className="text-sm font-bold text-slate-500">出品者に見せてください</p>
-                                        <div className="w-48 h-48 bg-slate-900 mx-auto flex items-center justify-center text-white font-mono text-xs rounded-lg shadow-inner">
-                                            [QR CODE]<br />{transaction.id.substring(0, 8)}
+
+                                {/* Hybrid Logic: If Self-Trade (Buyer & Seller), show BOTH sections stack */}
+
+                                {(isSeller || (isBuyer && isSeller)) && (
+                                    <div className="space-y-4 mb-8 border-b border-slate-100 pb-8">
+                                        <p className="text-sm font-bold text-slate-500">【売り手】このQRコードを買い手に提示してください</p>
+                                        <div className="bg-white p-4 mx-auto inline-block rounded-lg shadow-inner border border-slate-200">
+                                            <QRCode value={transaction.id} size={160} />
                                         </div>
-                                        <p className="text-xs text-slate-400">商品を確認してから提示してください</p>
+                                        <p className="text-xs text-slate-400">商品を手渡す際に提示してください</p>
                                     </div>
-                                ) : (
+                                )}
+
+                                {(isBuyer || (isBuyer && isSeller)) && (
                                     <div className="space-y-4">
-                                        <p className="text-sm font-bold text-slate-500">買い手のQRコードを読み取ってください</p>
+                                        <p className="text-sm font-bold text-slate-500">【買い手】売り手のQRコードを読み取ってください</p>
                                         <div className="w-48 h-48 bg-slate-100 mx-auto flex items-center justify-center border border-slate-300 rounded-lg">
                                             <span className="text-slate-400 text-xs">Camera View (Mock)</span>
                                         </div>
@@ -234,8 +243,8 @@ Musashino Linkで連絡先を確認しました。
                                                 const { toast } = await import('sonner');
                                                 // Check for Demo Mode (if currentUser is Debug User or Bypass Flag)
                                                 // We can infer demo mode if email matches debug pattern OR via explicit prop if we had one.
-                                                // Assuming Seller is clicking this (currentUser == seller).
-                                                const isDemo = currentUser.university_email?.startsWith('s2527');
+                                                // Assuming Buyer is clicking this (currentUser == buyer).
+                                                const isDemo = currentUser.university_email?.startsWith('s2527') || currentUser.is_demo;
 
                                                 if (isDemo) {
                                                     toast.success("デモ決済: バーコードを読み取りました");
@@ -246,11 +255,11 @@ Musashino Linkで連絡先を確認しました。
                                                 const { httpsCallable } = await import('firebase/functions');
                                                 const { functions } = await import('@/lib/firebase');
 
-                                                toast.info("決済確定処理中...", { duration: 5000 });
+                                                toast.info("受取確認処理中...", { duration: 5000 });
                                                 try {
                                                     const captureFn = httpsCallable(functions, 'capturePayment');
                                                     await captureFn({ transactionId: transaction.id });
-                                                    toast.success("決済完了！取引成立です");
+                                                    toast.success("受取完了！支払いを確定しました");
                                                     // Reload to show 'completed' state and rating UI
                                                     window.location.reload();
                                                 } catch (e: any) {
@@ -258,12 +267,8 @@ Musashino Linkで連絡先を確認しました。
                                                 }
                                             }}
                                         >
-                                            QRコードを読み取って確定 (Capture)
+                                            QRコードを読み取って受取完了 (Scan)
                                         </Button>
-                                        <p className="text-xs text-red-500 font-bold bg-red-50 p-2 rounded">
-                                            ※押すと即座に決済が確定します。<br />
-                                            必ず商品を手渡してから押してください。
-                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -275,17 +280,6 @@ Musashino Linkで連絡先を確認しました。
                                 <span className="font-bold">待ち合わせ場所:</span> {meetingPlace}
                             </div>
                         )}
-
-                        {isBuyer && (
-                            <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800">
-                                <strong>次のステップ:</strong><br />
-                                1. 大学で出品者と会います。<br />
-                                2. 商品の状態を確認します。<br />
-                                3. 問題なければこの画面のQRコードを見せます。<br />
-                                4. 出品者が読み取ると決済が確定します。
-                            </div>
-                        )}
-
                     </CardContent>
                 </Card>
             )}
@@ -358,20 +352,65 @@ Musashino Linkで連絡先を確認しました。
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="col-span-full text-center text-slate-500 text-sm py-2">
-                                        <Badge variant="outline" className="bg-slate-100">評価済み</Badge>
+                                    <div className="col-span-full text-center py-4 space-y-3">
+                                        <div className="text-slate-500 text-sm">
+                                            <Badge variant="outline" className="bg-slate-100 mb-2">評価済み</Badge>
+                                            <p>取引はすべて完了しました。お疲れ様でした！</p>
+                                        </div>
+                                        <Button
+                                            onClick={() => window.location.href = '/mypage'}
+                                            className="bg-slate-800 text-white hover:bg-slate-700 w-full md:w-auto md:px-8"
+                                        >
+                                            取引を終了して戻る
+                                        </Button>
                                     </div>
                                 )}
                             </div>
 
                             <div className="mt-4">
-                                <Button
-                                    variant="ghost"
-                                    className="w-full text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    onClick={() => alert("運営に問題を報告しました (Mock)")}
-                                >
-                                    <AlertTriangle className="mr-2 h-4 w-4" /> 問題を報告する
-                                </Button>
+                                <Dialog>
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            className="w-full text-red-600 hover:bg-red-50 hover:text-red-700"
+                                        >
+                                            <AlertTriangle className="mr-2 h-4 w-4" /> 問題を報告する
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>問題を報告</DialogTitle>
+                                            <DialogDescription>
+                                                運営チームに問題を報告します。この報告は相手には通知されません。
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                            <textarea
+                                                id="report-reason"
+                                                className="flex min-h-[80px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                                placeholder="問題の詳細を入力してください（例: 相手が現れない、暴言を吐かれた等）"
+                                            />
+                                            <Button onClick={async () => {
+                                                const reasonEl = document.getElementById('report-reason') as HTMLTextAreaElement;
+                                                const reason = reasonEl.value;
+                                                if (!reason) return;
+
+                                                try {
+                                                    const { reportIssue } = await import('@/services/firestore');
+                                                    await reportIssue('transaction', transaction.id, 'user_report', reason);
+                                                    toast.success("報告を受け付けました");
+                                                    // Close dialog hack (or use state if strictly controlled, but Dialog primitive handles close on outside click)
+                                                    // For cleaner UX, we should use state, but this is inside a deeply nested block.
+                                                    // Let's rely on toast for now.
+                                                } catch (e) {
+                                                    toast.error("送信に失敗しました");
+                                                }
+                                            }} className="bg-red-600 hover:bg-red-700 text-white w-full">
+                                                送信する
+                                            </Button>
+                                        </div>
+                                    </DialogContent>
+                                </Dialog>
                             </div>
                         </div>
 

@@ -1,0 +1,24 @@
+
+> musashino-link@0.1.0 build C:\musashino link
+> next build
+
+▲ Next.js 16.1.1 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 9.7s
+  Running TypeScript ...
+Failed to compile.
+
+./app/transactions/new/page.tsx:52:39
+Type error: 'e' is of type 'unknown'.
+
+[0m [90m 50 |[39m         } [36mcatch[39m (e) {
+ [90m 51 |[39m             console[33m.[39merror(e)[33m;[39m
+[31m[1m>[22m[39m[90m 52 |[39m             alert([32m"取引の開始に失敗しました: "[39m [33m+[39m (e[33m.[39mmessage [33m||[39m [32m"Unknown error"[39m))[33m;[39m
+ [90m    |[39m                                       [31m[1m^[22m[39m
+ [90m 53 |[39m         } [36mfinally[39m {
+ [90m 54 |[39m             setCreating([36mfalse[39m)[33m;[39m
+ [90m 55 |[39m         }[0m
+Next.js build worker exited with code: 1 and signal: null
+ ELIFECYCLE  Command failed with exit code 1.

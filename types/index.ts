@@ -16,6 +16,7 @@ export interface User {
     is_verified?: boolean; // 学籍番号認証済み
     stripe_connect_id?: string; // Stripe Connect Account ID (acct_...)
     charges_enabled?: boolean; // 決済有効化フラグ (KYC完了)
+    is_demo?: boolean; // [Test] デモユーザー
     ratings?: {
         count: number;
         total_score: number; // average = total_score / count
