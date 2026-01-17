@@ -45,7 +45,16 @@ service cloud.firestore {
       allow create: if isVerifiedStudent() 
                     && request.resource.data.seller_id == request.auth.uid
                     && request.resource.data.description.size() < 2000; // Anti-Abuse: Max 2000 chars
-      allow update: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
+      allow update: if isAuthenticated() && (
+                      resource.data.seller_id == request.auth.uid
+                      || (
+                        // Allow Buyer to lock item (Transaction Start)
+                        isVerifiedStudent() 
+                        && resource.data.status == 'listing'
+                        && request.resource.data.status == 'matching'
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                      )
+                    );
       allow delete: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
     }
 

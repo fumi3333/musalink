@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         id: firebaseUser.uid, // Use REAL Anonymous UID
                         university_email: isBuyer ? "s1111111@stu.musashino-u.ac.jp" : "s2527084@stu.musashino-u.ac.jp",
                         student_id: isBuyer ? "s1111111" : "s2527084",
-                        display_name: isBuyer ? "Guest Buyer" : "Guest Seller",
+                        display_name: isBuyer ? "Guest Buyer" : "Test User (s2527084)",
                         is_verified: true,
                         charges_enabled: true,
                         is_demo: true, // Flag for Rules
