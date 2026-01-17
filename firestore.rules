@@ -45,7 +45,7 @@ service cloud.firestore {
       allow create: if isVerifiedStudent() 
                     && request.resource.data.seller_id == request.auth.uid
                     && request.resource.data.description.size() < 2000; // Anti-Abuse: Max 2000 chars
-      allow update: if isAuthenticated(); // DEBUG: Permissive update for beta test
+      allow update: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
     }
 
@@ -83,12 +83,17 @@ service cloud.firestore {
 
     // Conversations & Messages (Chat)
     match /conversations/{conversationId} {
-      allow read, write: if isAuthenticated(); // Refine if participants are checked in logic
+      // Allow read/update if user is a participant
+      allow read, update: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      // Allow create if user includes themselves in participants
+      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.participants;
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated(); // Read allows any auth (so support can see?) - keep loose for now or tighten
-        allow create: if isVerifiedStudent() 
-                      && request.resource.data.text.size() < 1000; // Anti-Abuse: Max 1000 chars
+        // Allow read/write if user is a participant of the parent conversation
+        // Note: usage of get() incurs a read charge. 
+        // We use the parent document to check permissions.
+        allow read, write: if isAuthenticated() 
+                           && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
       }
     }
     // Payout Requests

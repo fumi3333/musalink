@@ -94,7 +94,7 @@ Musashino Linkで連絡先を確認しました。
                 );
 
                 scanner.render(async (decodedText: string) => {
-                    console.log("Scanned:", decodedText);
+                    // console.log("Scanned:", decodedText);
 
                     // Validate ID
                     if (decodedText === transaction.id) {
