@@ -13,7 +13,7 @@ import {
     increment,
     DocumentData
 } from "firebase/firestore";
-import { Item, Transaction, User, TransactionStatus } from "@/types";
+import { Item, Transaction, User, TransactionStatus, Notification } from "@/types";
 
 // Collection References
 const itemsRef = collection(db, "items");
@@ -419,3 +419,48 @@ export const reportIssue = async (type: 'user' | 'item' | 'transaction', targetI
 // --- Rating ---
 // rateUser is already defined above.
 
+
+// --- Notifications Service ---
+
+export const getNotifications = async (userId: string): Promise<Notification[]> => {
+    try {
+        const q = query(
+            collection(db, "users", userId, "notifications"),
+            orderBy("createdAt", "desc")
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Notification));
+    } catch (e) {
+        console.error("Error getting notifications:", e);
+        return [];
+    }
+};
+
+export const markNotificationRead = async (userId: string, notificationId: string) => {
+    try {
+        const ref = doc(db, "users", userId, "notifications", notificationId);
+        await updateDoc(ref, { read: true });
+    } catch (e) {
+        console.error("Error marking notification read:", e);
+    }
+};
+
+export const markAllNotificationsRead = async (userId: string) => {
+    try {
+        const q = query(
+            collection(db, "users", userId, "notifications"),
+            where("read", "==", false)
+        );
+        const snapshot = await getDocs(q);
+
+        // Use Promise.all for simplicity instead of batch for standard updates
+        const updates = snapshot.docs.map(d => updateDoc(d.ref, { read: true }));
+        await Promise.all(updates);
+
+    } catch (e) {
+        console.error("Error marking all read:", e);
+    }
+};

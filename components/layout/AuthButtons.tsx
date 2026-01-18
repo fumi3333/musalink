@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { User as UserIcon, LogIn, AlertCircle } from 'lucide-react';
+import { User as UserIcon, LogIn, AlertCircle, Bell } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import {
     Dialog,
@@ -78,7 +78,18 @@ export const AuthButtons = () => {
 
 
     return (
-        <div className="relative">
+        <div className="flex items-center gap-1 relative">
+            {/* Notification Bell */}
+            <Link href="/notifications">
+                <Button variant="ghost" size="icon" className="text-slate-600 hover:text-violet-600 relative">
+                    <Bell className="w-5 h-5" />
+                    {unreadNotifications > 0 && (
+                        <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                    )}
+                </Button>
+            </Link>
+
+            {/* User Menu Toggle */}
             <Button
                 variant="ghost"
                 size="icon"
@@ -89,12 +100,6 @@ export const AuthButtons = () => {
                     <UserIcon className="w-5 h-5" />
                     {isVerified && (
                         <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></span>
-                    )}
-                    {/* Notification Badge */}
-                    {user && (unreadNotifications > 0) && (
-                        <span className="absolute -top-1 -left-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
-                            <span className="sr-only">New Notifications</span>
-                        </span>
                     )}
                 </div>
             </Button>
@@ -156,6 +161,20 @@ export const AuthButtons = () => {
                             >
                                 <span className="text-lg">💰</span>
                                 売上・口座管理
+                            </Link>
+
+                            <Link
+                                href="/notifications"
+                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
+                                onClick={() => setMenuOpen(false)}
+                            >
+                                <span className="text-lg">🔔</span>
+                                お知らせ
+                                {unreadNotifications > 0 && (
+                                    <span className="ml-auto bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5">
+                                        {unreadNotifications}
+                                    </span>
+                                )}
                             </Link>
 
                             <div className="border-t border-slate-100 pt-2">

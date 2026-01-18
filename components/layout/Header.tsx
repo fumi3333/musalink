@@ -70,6 +70,14 @@ export const Header = () => {
                         取引一覧
                     </Link>
                     <Link
+                        href="/notifications"
+                        className="flex items-center gap-3 p-3 rounded-md hover:bg-slate-50 text-slate-700 font-bold"
+                        onClick={() => setIsMenuOpen(false)}
+                    >
+                        <Bell className="w-5 h-5 text-violet-600" />
+                        お知らせ
+                    </Link>
+                    <Link
                         href="/items/create"
                         className="flex items-center gap-3 p-3 rounded-md hover:bg-slate-50 text-slate-700 font-bold"
                         onClick={() => setIsMenuOpen(false)}

@@ -76,3 +76,14 @@ export interface Transaction {
     updatedAt?: any; // Firestore Timestamp
     createdAt?: any; // Firestore Timestamp
 }
+
+export interface Notification {
+    id: string;
+    type: 'transaction_created' | 'transaction_updated' | 'message_received' | 'system';
+    title: string;
+    body: string;
+    link?: string;
+    read: boolean;
+    createdAt: any; // Firestore Timestamp
+}
+
