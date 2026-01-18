@@ -293,7 +293,7 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
         // [Beta Strategy] Check if Seller is Mock
         const isMockSeller = seller.stripe_connect_id.startsWith('acct_mock_');
 
-        let paymentIntentData: any = {
+        const paymentIntentData: any = {
             amount: amount,
             currency: 'jpy',
             automatic_payment_methods: { enabled: true },
@@ -509,7 +509,7 @@ export const rateUser = functions.https.onCall(async (data, context) => {
             const userRef = db.collection('users').doc(targetUserId);
             const userDoc = await t.get(userRef);
 
-            let userData = userDoc.exists ? userDoc.data()! : {};
+            const userData = userDoc.exists ? userDoc.data()! : {};
             const currentRatings = userData.ratings || { count: 0, total_score: 0 };
 
             const newCount = (currentRatings.count || 0) + 1;
