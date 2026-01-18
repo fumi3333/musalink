@@ -42,8 +42,19 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
     const [copied, setCopied] = useState(false);
     const [meetingPlace, setMeetingPlace] = useState(transaction.meeting_place || "");
 
-    const isBuyer = currentUser.id === transaction.buyer_id;
-    const isSeller = currentUser.id === transaction.seller_id;
+    let isBuyer = currentUser.id === transaction.buyer_id;
+    let isSeller = currentUser.id === transaction.seller_id;
+
+    // [Debug/Self-Trade Fix] If both are true (Self-Trade), use student_id or other heuristic to force role
+    if (isBuyer && isSeller) {
+        // Guest Buyer has s1111111
+        if (currentUser.student_id === 's1111111') {
+            isSeller = false;
+        } else {
+            // Default to Seller for s2527084 or others
+            isBuyer = false;
+        }
+    }
 
     // システム利用料 (100 Coin)
     const feeAmount = calculateFee(item.price);
@@ -94,8 +105,6 @@ Musashino Linkで連絡先を確認しました。
                 );
 
                 scanner.render(async (decodedText: string) => {
-                    // console.log("Scanned:", decodedText);
-
                     // Validate ID
                     if (decodedText === transaction.id) {
                         scanner.clear();
@@ -109,7 +118,7 @@ Musashino Linkで連絡先を確認しました。
                         toast.error("無効なQRコードです（取引IDが一致しません）");
                     }
                 }, (error: any) => {
-                    // console.warn(error);
+                    // Ignored scan error
                 });
             } catch (e) {
                 console.error("Scanner Init Error", e);

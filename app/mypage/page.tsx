@@ -145,10 +145,58 @@ export default function MyPage() {
     const activeTx = myTransactions.filter(t => t.status !== 'completed' && t.status !== 'cancelled');
     const pastTx = myTransactions.filter(t => t.status === 'completed' || t.status === 'cancelled');
 
+    // --- Edit Profile Logic ---
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editForm, setEditForm] = useState({
+        display_name: "",
+        interests: [] as string[]
+    });
+
+    const openEdit = () => {
+        if (!userData) return;
+        setEditForm({
+            display_name: userData.display_name || "",
+            interests: userData.interests || []
+        });
+        setIsEditOpen(true);
+    };
+
+    const handleUpdateProfile = async () => {
+        if (!userData) return;
+        const { toast } = require('sonner');
+        const { updateUser } = await import('@/services/firestore');
+
+        try {
+            await updateUser(userData.id, editForm);
+            toast.success("プロフィールを更新しました");
+            setIsEditOpen(false);
+            // Ideally re-fetch or update local context. AuthContext might need a mechanism or just reload.
+            // For MVP, reload is safest to sync AuthContext
+            window.location.reload();
+        } catch (e) {
+            toast.error("更新に失敗しました");
+        }
+    };
+
+    // Lazy Load Interest Selector to avoid huge bundle potentially? (Not really needed but good practice)
+    const { InterestSelector } = require('@/components/profile/InterestSelector');
+    const { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } = require('@/components/ui/dialog');
+    const { Input } = require('@/components/ui/input');
+    const { Label } = require('@/components/ui/label');
+
     return (
         <div className="min-h-screen bg-slate-100 pb-20">
             {/* --- Profile Header --- */}
-            <div className="bg-white p-6 shadow-sm mb-4">
+            <div className="bg-white p-6 shadow-sm mb-4 relative">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+                    onClick={openEdit}
+                >
+                    編集
+                </Button>
+
                 <div className="max-w-md mx-auto flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center text-2xl overflow-hidden border-2 border-slate-100">
                         {userData?.photoURL ? (
@@ -164,21 +212,54 @@ export default function MyPage() {
                             <span className="font-bold text-slate-700">5.0</span>
                             <span className="text-slate-400 text-xs ml-1">(Mock Rating)</span>
                         </div>
-                        <div className="mt-1 flex gap-2">
+
+                        {/* Tags Display */}
+                        <div className="flex flex-wrap gap-1 mt-2">
                             {userData?.is_verified && (
                                 <Badge variant="secondary" className="bg-blue-50 text-blue-700 text-[10px]">
                                     学内認証済
                                 </Badge>
                             )}
-                            {userData?.is_demo && (
-                                <Badge variant="secondary" className="bg-amber-50 text-amber-700 text-[10px]">
-                                    Test User
+                            {userData?.interests?.map((tag: string) => (
+                                <Badge key={tag} variant="outline" className="text-[10px] text-slate-500 bg-slate-50">
+                                    {tag}
                                 </Badge>
-                            )}
+                            ))}
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* --- Edit Modal --- */}
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>プロフィール編集</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>ニックネーム (表示名)</Label>
+                            <Input
+                                value={editForm.display_name}
+                                onChange={(e: any) => setEditForm({ ...editForm, display_name: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <InterestSelector
+                                selected={editForm.interests}
+                                onChange={(tags: string[]) => setEditForm({ ...editForm, interests: tags })}
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditOpen(false)}>キャンセル</Button>
+                        <Button onClick={handleUpdateProfile}>保存する</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* --- Main Content --- */}
             <div className="max-w-md mx-auto px-4">

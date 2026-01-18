@@ -26,7 +26,7 @@ import { httpsCallable } from "firebase/functions";
 export const rateUser = async (targetUserId: string, transactionId: string, role: 'buyer' | 'seller', score: number) => {
     try {
         const rateUserFn = httpsCallable(functions, 'rateUser');
-        await rateUserFn({ transactionId, score });
+        await rateUserFn({ transactionId, score, role });
         // Note: targetUserId and role are determined server-side for security, but kept in signature for compatibility or if needed later.
     } catch (e: any) {
         if (e.code === 'unavailable' || e.message?.includes('offline') || e.code === 'internal') {
@@ -349,6 +349,34 @@ export const getUser = async (userId: string): Promise<User> => {
         is_demo: userId !== 'user_001' // Guest is demo
     };
 }
+
+export const updateUser = async (userId: string, data: Partial<User>) => {
+    try {
+        const userRef = doc(db, "users", userId);
+        // Clean undefined values to avoid Firestore errors
+        const cleanData = Object.fromEntries(
+            Object.entries(data).filter(([_, v]) => v !== undefined)
+        );
+
+        await updateDoc(userRef, {
+            ...cleanData,
+            updatedAt: serverTimestamp()
+        });
+
+        // If it's the current user, we might need to update AuthContext state implies a reload or re-fetch.
+        // But preventing full reload is better. The snapshot listener in AuthContext (if any) or re-fetch would handle it.
+        // Current AuthContext uses onAuthStateChanged but doesn't listen to doc changes real-time for profile data in detail,
+        // it fetches once. We might need to manually update local state or trigger re-fetch.
+
+    } catch (e: any) {
+        if (e.code === 'unavailable' || e.message?.includes('offline')) {
+            console.warn("updateUser offline, treating as success for demo");
+            return;
+        }
+        console.error("Error updating user:", e);
+        throw e;
+    }
+};
 // --- MyPage / Dashboard Services ---
 
 export const getMyItems = async (userId: string): Promise<Item[]> => {

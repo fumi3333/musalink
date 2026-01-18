@@ -450,7 +450,7 @@ export const rateUser = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
     }
     const uid = context.auth.uid;
-    const { transactionId, score } = data;
+    const { transactionId, score, role } = data; // role: 'buyer' | 'seller' (optional but recommended for disambiguation)
 
     // [Anti-Abuse] Rate Limit: 30 ratings per hour (Should be enough for normal use)
     await checkRateLimit(uid, 'rateUser', 30, 3600);
@@ -467,11 +467,26 @@ export const rateUser = functions.https.onCall(async (data, context) => {
         const tx = txSnap.data() as any;
 
         // 2. Permission Check: user must be buyer or seller
-        const isBuyer = tx.buyer_id === uid;
-        const isSeller = tx.seller_id === uid;
+        let isBuyer = tx.buyer_id === uid;
+        let isSeller = tx.seller_id === uid;
 
         if (!isBuyer && !isSeller) {
             throw new functions.https.HttpsError('permission-denied', 'Not a participant');
+        }
+
+        // [Debug/Self-Trade Fix] If User is BOTH (Self-Trade/Debug), rely on 'role' param if valid
+        if (isBuyer && isSeller && role) {
+            if (role === 'buyer') isSeller = false;
+            else if (role === 'seller') isBuyer = false;
+        }
+        // Normal Case: If role is provided, verify it matches
+        else if (role) {
+            if (role === 'buyer' && !isBuyer) throw new functions.https.HttpsError('permission-denied', 'Role mismatch: claimed buyer but is not buyer');
+            if (role === 'seller' && !isSeller) throw new functions.https.HttpsError('permission-denied', 'Role mismatch: claimed seller but is not seller');
+
+            // Enforce single role operation
+            if (role === 'buyer') isSeller = false;
+            if (role === 'seller') isBuyer = false;
         }
 
         // 3. Status Check
@@ -485,6 +500,8 @@ export const rateUser = functions.https.onCall(async (data, context) => {
         }
 
         // 5. Determine Target Logic
+        // If I am Buyer, I rate Seller. If I am Seller, I rate Buyer.
+        // In Self-Trade without Role override, this was ambiguous. Now 'isBuyer'/'isSeller' are mutually exclusive if 'role' was passed.
         const targetUserId = isBuyer ? tx.seller_id : tx.buyer_id;
 
         // 6. Update Target User & Transaction
@@ -492,12 +509,7 @@ export const rateUser = functions.https.onCall(async (data, context) => {
             const userRef = db.collection('users').doc(targetUserId);
             const userDoc = await t.get(userRef);
 
-            if (!userDoc.exists) {
-                // Should not happen for valid transaction, but handle safely
-                throw new functions.https.HttpsError('not-found', "User profile not found");
-            }
-
-            const userData = userDoc.data()!;
+            let userData = userDoc.exists ? userDoc.data()! : {};
             const currentRatings = userData.ratings || { count: 0, total_score: 0 };
 
             const newCount = (currentRatings.count || 0) + 1;
@@ -528,71 +540,9 @@ export const rateUser = functions.https.onCall(async (data, context) => {
     }
 });
 
-// [New] Create Stripe Connect Account
-export const createStripeConnectAccount = functions.https.onCall(async (data: any, _context: functions.https.CallableContext) => {
-    const { userId } = data;
 
-    if (!userId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing userId');
-    }
 
-    // [Beta Test Strategy] Force Mock for EVERYONE
-    // Reason: User wants to skip Stripe KYC risk/hassle for beta testers (Sellers),
-    // but allow Real Payment UI for Buyers.
-    // Logic: 
-    // - Seller -> Mock Account (Skipped KYC) -> "Registration Complete"
-    // - Buyer -> Real Payment Intent -> Money goes to Platform Account (No Transfer)
-    const forceMock = true;
 
-    if (forceMock) {
-        console.log(`[Mock] Creating fake Connect account for ${userId} (Reason: Beta Strategy - Skip KYC)`);
-        const mockAccountId = `acct_mock_${userId}`;
-
-        await db.collection('users').doc(userId).set({
-            stripe_connect_id: mockAccountId,
-            charges_enabled: true // Auto-enable for demo
-        }, { merge: true });
-
-        return { accountId: mockAccountId };
-    }
-
-    // Unreachable code removed for cleanup
-    return null;
-});
-
-export const createStripeAccountLink = functions.https.onCall(async (data, context) => {
-    const accountId = data.accountId;
-    const returnUrl = data.returnUrl || "https://musa-link.web.app/seller/payout/callback";
-    const userId = context.auth?.uid; // Securely get UID
-
-    if (!accountId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing accountId');
-    }
-
-    // [Mock] Guest Bypass & Beta Stratgy
-    if (accountId.startsWith('acct_mock_')) {
-        console.log(`[Mock] Generating fake account link for ${accountId}`);
-        return { url: returnUrl };
-    }
-
-    // [Fix] Legacy Account Reset
-    // If user has a "Real" ID from previous attempt but we are now in "Force Mock" mode,
-    // we must RESET them to Mock to avoid the "internal" error loop.
-    if (userId) {
-        console.log(`[Fix] Resetting Legacy Account ${accountId} to Mock for ${userId}`);
-        const mockAccountId = `acct_mock_${userId}`;
-
-        await db.collection('users').doc(userId).set({
-            stripe_connect_id: mockAccountId,
-            charges_enabled: true
-        }, { merge: true });
-
-        // Return success immediately
-        return { url: returnUrl };
-    }
-
-    throw new functions.https.HttpsError('failed-precondition', 'Real onboarding disabled for beta. Please retry to auto-fix.');
-});
 
 // [New] Stripe Webhook
 export const stripeWebhook = functions.https.onRequest(async (req, res) => {
