@@ -9,11 +9,8 @@ interface MeetingPlaceSelectorProps {
 }
 
 const PLACES = [
-    "1号館 1F ロビー",
-    "3号館 学食前ベンチ",
-    "図書館前（旧・新）",
-    "5号館 ファミリーマート前",
-    "6号館 (アリーナ) 入口"
+    "1号館 1F",
+    "4号館前 芝生広場"
 ];
 
 export const MeetingPlaceSelector = ({ value, onChange, disabled }: MeetingPlaceSelectorProps) => {
