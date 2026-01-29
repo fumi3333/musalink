@@ -63,6 +63,15 @@ export const InAppBrowserGuard = ({ children }: { children: React.ReactNode }) =
                     >
                         再読み込み
                     </Button>
+
+                    <div className="pt-4 border-t border-slate-100">
+                        <button
+                            onClick={() => setIsInAppBrowser(false)}
+                            className="text-xs text-slate-400 hover:text-slate-600 underline"
+                        >
+                            警告を無視して進む (ログインできない可能性があります)
+                        </button>
+                    </div>
                 </div>
             </div>
         );
