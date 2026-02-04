@@ -57,20 +57,19 @@ export const InAppBrowserGuard = ({ children }: { children: React.ReactNode }) =
                         </div>
                     </div>
 
-                    <Button
-                        className="w-full font-bold"
-                        onClick={() => window.location.href = window.location.href}
-                    >
-                        再読み込み
-                    </Button>
-
-                    <div className="pt-4 border-t border-slate-100">
-                        <button
+                    <div className="space-y-4 pt-4">
+                        <Button
+                            variant="destructive"
+                            className="w-full font-bold"
                             onClick={() => setIsInAppBrowser(false)}
-                            className="text-xs text-slate-400 hover:text-slate-600 underline"
                         >
-                            警告を無視して進む (ログインできない可能性があります)
-                        </button>
+                            LINEのままで開く (非推奨)
+                        </Button>
+                        
+                        <p className="text-xs text-slate-500 text-center">
+                            ※ LINEのままだとGoogleログインに失敗する可能性があります。<br/>
+                            その場合は上記手順でChromeなどを開いてください。
+                        </p>
                     </div>
                 </div>
             </div>

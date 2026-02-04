@@ -64,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         coin_balance: 10000,
                         // Enhanced Profile Data
                         departmentId: isBuyer ? 'Economics' : 'Law',
+                        universityId: 'musashino',
                         grade: isBuyer ? 'B4' : 'B1', // s11(Old) vs s25(New)
                         interests: ['Law', 'Economics']
                     });
@@ -78,18 +79,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                             // [Data Strategy] Auto-populate Grade/Dept from Email if missing
                             const data = userSnap.data();
-                            if (!data.grade || !data.departmentId) {
-                                const email = firebaseUser.email || "";
+                            
+                            // [Multi-Tenancy] Resolve University ID
+                            const email = firebaseUser.email || "";
+                            const universityId = getUniversityFromEmail(email);
+
+                            // Strict Domain Enforcement (Foundation for Multi-Tenancy)
+                            if (!universityId) {
+                                console.warn("Blocked unsupported domain:", email);
+                                await signOut(auth);
+                                setUser(null);
+                                setUserData(null);
+                                toast.error("この大学のメールアドレスは現在対応していません (Musashino Only)");
+                                setLoading(false);
+                                return;
+                            }
+
+                            if (!data.grade || !data.departmentId || !data.universityId) {
                                 const derivedGrade = calculateGrade(email);
                                 // Default Dept to 'Unknown' or try to guess? 'Unknown' for now.
 
-                                if (derivedGrade !== "Unknown") {
+                                if (derivedGrade !== "Unknown" || !data.universityId) {
                                     // Update Firestore
-                                    const updates = {
-                                        grade: data.grade || derivedGrade,
-                                        departmentId: data.departmentId || "Unknown", // Placeholder
-                                        email: email // Ensure email is synced
+                                    const updates: any = {
+                                        email: email, // Ensure email is synced
+                                        universityId: universityId
                                     };
+                                    
+                                    if (!data.grade) updates.grade = derivedGrade;
+                                    if (!data.departmentId) updates.departmentId = "Unknown";
 
                                     await setDoc(userRef, updates, { merge: true });
 
@@ -230,4 +248,20 @@ function calculateGrade(email: string): string {
     if (gradeNum === 3) return "B3";
     if (gradeNum === 4) return "B4";
     return "Other";
+}
+
+// [Multi-Tenancy] Identify University from Email Domain
+function getUniversityFromEmail(email: string): string | null {
+    if (!email) return null;
+    
+    // 1. Musashino University
+    if (email.endsWith("@stu.musashino-u.ac.jp") || email.endsWith("@musashino-u.ac.jp")) {
+        return "musashino";
+    }
+
+    // 2. Future Expansions (Commented out but ready)
+    // if (email.endsWith("@keio.jp")) return "keio";
+    // if (email.endsWith("@waseda.jp")) return "waseda";
+
+    return null; // Unsupported domain
 }

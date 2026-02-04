@@ -8,6 +8,7 @@ export interface User {
     grade?: string | number; // 学年 (e.g., 'B1', 'M1' or 1, 2) [Expanded type]
     department?: string; // 学部学科 (e.g., '工学部数理工学科')
     departmentId?: string; // [New] 学部コード (e.g., 'ECON_01')
+    universityId?: string; // [New] 大学ID (e.g., 'musashino')
     trust_score: number;
     interests?: string[]; // [New] Zax統合用の興味タグ
     responseTimeAvg?: number; // [New] 平均返信時間（秒）
