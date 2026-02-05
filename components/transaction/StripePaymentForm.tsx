@@ -47,22 +47,25 @@ export default function StripePaymentForm({ transactionId, userId, onSuccess }: 
         if (error) {
             setMessage(error.message ?? "An unexpected error occurred.");
             setIsLoading(false);
-        } else if (paymentIntent && paymentIntent.status === "succeeded") {
-            setMessage("Payment succeeded! Unlocking contact info...");
+        } else if (paymentIntent && (paymentIntent.status === "succeeded" || paymentIntent.status === "requires_capture")) {
+            setMessage("Payment authorized! Funds reserved.");
 
-            // Call Server to Unlock
+            // [Auth & Capture Flow]
+            // We do NOT unlock yet. We just update status to 'payment_pending'.
+            // The actual unlock happens via QR Code scan.
             try {
-                const unlockFn = httpsCallable(functions, 'unlockTransaction');
-                await unlockFn({
-                    transactionId,
-                    userId,
-                    paymentIntentId: paymentIntent.id
+                // [Auth & Capture Flow]
+                // Valid status transition allowed by Rules: approved -> payment_pending
+                const { updateTransactionStatus } = await import('@/services/firestore');
+                await updateTransactionStatus(transactionId, 'payment_pending', {
+                    payment_intent_id: paymentIntent.id
                 });
-                toast.success("支払いが完了しました！連絡先が開示されます。");
-                onSuccess();
-            } catch (serverError: any) {
-                console.error(serverError);
-                setMessage("支払いは完了しましたが、画面更新に失敗しました。運営に連絡してください。");
+
+                toast.success("支払いの仮押さえが完了しました！キャンパスで受け渡しを行ってください。");
+                onSuccess(); // Triggers UI refresh
+            } catch (dbError: any) {
+                console.error(dbError);
+                setMessage("決済は承認されましたが、ステータス更新に失敗しました。");
             } finally {
                 setIsLoading(false);
             }

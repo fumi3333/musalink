@@ -67,22 +67,30 @@ service cloud.firestore {
       allow create: if isVerifiedStudent() && request.resource.data.buyer_id == request.auth.uid;
       
       // Update: Buyer or Seller, BUT Restricted Status Changes
+      // Update: Buyer or Seller with Strict State Machine
       allow update: if isVerifiedStudent() 
                     && (resource.data.buyer_id == request.auth.uid || resource.data.seller_id == request.auth.uid)
                     && (
-                      // 1. Allow non-status updates (or same status) - e.g. meeting place
+                      // 1. Allow updating non-protected fields (status unchanged)
+                      // e.g. meeting place, time
                       (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
                       ||
-                      // 2. Allowed Status Transitions
+                      // 2. Strict Status Transitions
                       (
-                         // request_sent -> cancelled / approved
-                         (resource.data.status == 'request_sent' && (request.resource.data.status == 'cancelled' || request.resource.data.status == 'approved'))
+                         // request_sent -> cancelled (Both) or approved (Seller only)
+                         (resource.data.status == 'request_sent' && (
+                            (request.resource.data.status == 'cancelled') || 
+                            (request.resource.data.status == 'approved' && request.auth.uid == resource.data.seller_id)
+                         ))
                          ||
-                         // approved -> payment_pending
-                         (resource.data.status == 'approved' && request.resource.data.status == 'payment_pending')
+                         // approved -> cancelled (Both - before payment)
+                         (resource.data.status == 'approved' && request.resource.data.status == 'cancelled')
+                         ||
+                         // approved -> payment_pending (Buyer only - after Stripe Auth)
+                         (resource.data.status == 'approved' && request.resource.data.status == 'payment_pending' && request.auth.uid == resource.data.buyer_id)
                       )
                       ||
-                      // 3. [DEMO EXCEPTION] Allow 'completed' ONLY for Demo Transactions
+                      // 3. [DEMO EXCEPTION] Allow 'completed' ONLY for verified Demo users
                       (
                         resource.data.is_demo == true 
                         && request.resource.data.status == 'completed'

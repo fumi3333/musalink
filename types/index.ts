@@ -72,7 +72,7 @@ export interface Transaction {
     buyer_rated?: boolean; // [New] 買い手: 評価完了
     seller_rated?: boolean; // [New] 売り手: 評価完了
     issue_reported?: boolean; // 問題報告あり
-    stripe_payment_intent_id?: string;
+    payment_intent_id?: string;
     is_demo?: boolean; // [Security] Allows checking if this is a test transaction for bypass rules
     updatedAt?: any; // Firestore Timestamp
     createdAt?: any; // Firestore Timestamp

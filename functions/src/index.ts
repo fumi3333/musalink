@@ -595,8 +595,16 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
         }
     }
 
-    res.json({ received: true });
+// [Security] Blocking Function (Requires Identity Platform)
+// To enable: Upgrade to Blaze Plan, Enable Identity Platform, and deploy this function.
+/*
+export const beforeSignIn = functions.auth.user().beforeSignIn((user, context) => {
+    const allowedDomains = ['@stu.musashino-u.ac.jp', '@musashino-u.ac.jp'];
+    if (user.email && !allowedDomains.some(d => user.email?.endsWith(d)) && user.email !== 'demo@musashino-u.ac.jp') {
+        throw new functions.auth.HttpsError('invalid-argument', 'Unauthorized email domain.');
+    }
 });
+*/
 
 // [Admin] Force Cancel Transaction
 export const adminCancelTransaction = functions.https.onCall(async (data, context) => {
