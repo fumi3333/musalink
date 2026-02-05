@@ -148,7 +148,7 @@ export default function AdminTransactionsPage() {
 
                             <div className="flex justify-between items-center mt-2 border-t pt-2">
                                 <span className="text-xs text-slate-400">
-                                    Stripe ID: {tx.stripe_payment_intent_id || "なし"}
+                                    Stripe ID: {tx.payment_intent_id || "なし"}
                                 </span>
 
                                 <Dialog>
@@ -219,7 +219,7 @@ function downloadCSV(transactions: Transaction[]) {
         tx.seller_id,
         tx.fee_amount ? (tx.fee_amount * 10) : 0, // Approximate total based on fee (10%), or just use fee
         tx.fee_amount || 0,
-        tx.stripe_payment_intent_id || ""
+        tx.payment_intent_id || ""
     ]);
 
     const csvContent = [
