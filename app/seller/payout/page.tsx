@@ -174,10 +174,15 @@ export default function PayoutPage() {
                                 onClick={async () => {
                                     if(!userData?.id || connectingStripe) return;
                                     setConnectingStripe(true);
+                                    const targetUrl = `${FUNCTIONS_BASE_URL}/executeStripeConnect`;
+                                    console.log("[Stripe Connect] Calling:", targetUrl, "from:", window.location.origin);
                                     try {
-                                        const idToken = await getIdToken(auth.currentUser!, true);
-                                        // 静的ホスト（musa-link.web.app）では /api が無いため Cloud Function を直接呼ぶ
-                                        const res = await fetch(`${FUNCTIONS_BASE_URL}/executeStripeConnect`, {
+                                        if (!auth.currentUser) {
+                                            throw new Error("ログインしていません。再度ログインしてください。");
+                                        }
+                                        const idToken = await getIdToken(auth.currentUser, true);
+
+                                        const res = await fetch(targetUrl, {
                                             method: 'POST',
                                             headers: {
                                                 'Authorization': `Bearer ${idToken}`,
@@ -190,11 +195,18 @@ export default function PayoutPage() {
                                             })
                                         });
 
-                                        const data = await res.json();
                                         if (!res.ok) {
-                                            throw new Error(data.error || "接続エラー");
+                                            const errorText = await res.text();
+                                            console.error("[Stripe Connect] Error response:", res.status, errorText);
+                                            let errorMsg = `サーバーエラー (${res.status})`;
+                                            try {
+                                                const errorJson = JSON.parse(errorText);
+                                                errorMsg = errorJson.error || errorMsg;
+                                            } catch { /* text was not JSON */ }
+                                            throw new Error(errorMsg);
                                         }
 
+                                        const data = await res.json();
                                         if (data.url) {
                                             toast.success("連携画面へ移動します");
                                             window.location.href = data.url;
@@ -202,8 +214,12 @@ export default function PayoutPage() {
                                             throw new Error("レスポンスにURLが含まれていません");
                                         }
                                     } catch(e: any) {
-                                        console.error(e);
-                                        toast.error("連携エラー: " + e.message);
+                                        console.error("[Stripe Connect] Error:", e);
+                                        let userMessage = e.message || "不明なエラー";
+                                        if (e instanceof TypeError && e.message.includes("fetch")) {
+                                            userMessage = `通信エラー: Cloud Function (${targetUrl}) に接続できませんでした。CORSまたはネットワークの問題の可能性があります。`;
+                                        }
+                                        toast.error(userMessage, { duration: 8000 });
                                     } finally {
                                         setConnectingStripe(false);
                                     }
