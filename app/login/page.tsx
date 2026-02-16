@@ -58,6 +58,32 @@ function LoginContent() {
           >
             Googleでログイン
           </Button>
+
+          <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-slate-200" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-slate-50 px-2 text-slate-500">For Testing</span>
+              </div>
+          </div>
+
+          <Button 
+              variant="outline"
+              className="w-full text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 border-dashed border-slate-300"
+              onClick={() => {
+                  // Safe call if debugLogin is not in interface yet or undefined
+                  const authCtx = useAuth() as any;
+                  if (authCtx.debugLogin) {
+                      authCtx.debugLogin('buyer');
+                  } else {
+                      alert("Debug login not available");
+                  }
+              }}
+              disabled={loading}
+          >
+              🧪 テスト用アカウントでログイン
+          </Button>
           <div className="text-center">
             <Button
               variant="link"

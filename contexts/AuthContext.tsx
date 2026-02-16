@@ -51,11 +51,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 // Handle Anonymous / Debug Users
                 if (firebaseUser.isAnonymous) {
-                     // Production Cleanup: Anonymous login is disabled for security.
-                     console.warn("Anonymous login is not supported in production.");
-                     await signOut(auth);
-                     setUser(null);
-                     setUserData(null);
+                     console.log("Debug/Guest Login Active");
+                     setUser(firebaseUser);
+                     setUserData({
+                         id: firebaseUser.uid,
+                         display_name: "テスト用 買い手",
+                         email: "guest_buyer@demo.local",
+                         universityId: "musashino",
+                         grade: "B2",
+                         departmentId: "工学部",
+                         student_id: "guest123",
+                         is_demo: true,
+                         trust_score: 50,
+                         coin_balance: 10000
+                     });
                      setLoading(false);
                      return;
                 } else {
@@ -221,7 +230,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const debugLogin = async (role: 'seller' | 'buyer' = 'seller') => {
-        toast.error("デモログインは無効化されました");
+        try {
+            const { signInAnonymously } = await import('firebase/auth');
+            await signInAnonymously(auth);
+            toast.success("テスト用アカウントでログインしました");
+        } catch (e: any) {
+            console.error(e);
+            toast.error("デモログインエラー: " + e.message);
+        }
     };
 
     return (

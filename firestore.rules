@@ -17,7 +17,8 @@ service cloud.firestore {
        return isAuthenticated() && (
          request.auth.token.email.matches('.*@stu\\.musashino-u\\.ac\\.jp$') ||
          request.auth.token.email.matches('.*@musashino-u\\.ac\\.jp$') ||
-         request.auth.token.email == 'demo@musashino-u.ac.jp'
+         request.auth.token.email == 'demo@musashino-u.ac.jp' ||
+         request.auth.token.firebase.sign_in_provider == 'anonymous'
        );
     }
 
