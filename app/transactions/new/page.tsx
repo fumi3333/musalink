@@ -74,8 +74,8 @@ function NewTransactionContent() {
                         <p className="text-slate-600">¥{item.price.toLocaleString()}</p>
                     </div>
 
-                    {/* [Self-Trading Block] */}
-                    {userData?.id === item.seller_id && !userData?.is_demo ? (
+                    {/* [Self-Trading Block] - DISABLED FOR TESTING */}
+                    {false && userData?.id === item.seller_id && !userData?.is_demo ? (
                         <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm font-bold border border-red-200">
                             自分の商品は購入できません
                         </div>
