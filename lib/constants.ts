@@ -15,6 +15,12 @@ export const calculateFee = (price: number): number => {
 // 学内ドメイン
 export const ALLOWED_DOMAIN = "stu.musashino-u.ac.jp";
 
+// Cloud Functions のベースURL（API Route が使えない静的ホストでも Stripe 連携できるように直接呼ぶ）
+export const FUNCTIONS_BASE_URL =
+    typeof process !== "undefined" && process.env?.NEXT_PUBLIC_FUNCTIONS_BASE_URL
+        ? process.env.NEXT_PUBLIC_FUNCTIONS_BASE_URL
+        : "https://us-central1-musa-link.cloudfunctions.net";
+
 // Feature Flags
 export const IS_BETA = process.env.NEXT_PUBLIC_IS_BETA === 'true';
 

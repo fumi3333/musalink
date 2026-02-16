@@ -8,12 +8,14 @@ import { db, auth } from "@/lib/firebase"
 import { addDoc, collection, serverTimestamp } from "firebase/firestore"
 import { getIdToken } from "firebase/auth"
 import { toast } from "sonner"
-import { CheckCircle, AlertTriangle } from "lucide-react"
+import { CheckCircle, AlertTriangle, Loader2 } from "lucide-react"
+import { FUNCTIONS_BASE_URL } from "@/lib/constants"
 
 export default function PayoutPage() {
     const { userData, loading } = useAuth();
     const [balance, setBalance] = useState(0);
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+    const [connectingStripe, setConnectingStripe] = useState(false);
 
     // Bank Account State (Mocked)
     // const [bankInfo, setBankInfo] = useState(...);
@@ -168,13 +170,14 @@ export default function PayoutPage() {
                             <Button 
                                 size="sm" 
                                 className="text-xs h-8 bg-[#635BFF] hover:bg-[#544DC8] text-white"
+                                disabled={connectingStripe}
                                 onClick={async () => {
-                                    if(!userData?.id) return;
-                                    
-                                    toast.info("Stripeアカウントを作成中...");
+                                    if(!userData?.id || connectingStripe) return;
+                                    setConnectingStripe(true);
                                     try {
                                         const idToken = await getIdToken(auth.currentUser!, true);
-                                        const res = await fetch('/api/stripe-connect', {
+                                        // 静的ホスト（musa-link.web.app）では /api が無いため Cloud Function を直接呼ぶ
+                                        const res = await fetch(`${FUNCTIONS_BASE_URL}/executeStripeConnect`, {
                                             method: 'POST',
                                             headers: {
                                                 'Authorization': `Bearer ${idToken}`,
@@ -200,11 +203,20 @@ export default function PayoutPage() {
                                         }
                                     } catch(e: any) {
                                         console.error(e);
-                                        toast.error("連携エラー: " + e.message); 
+                                        toast.error("連携エラー: " + e.message);
+                                    } finally {
+                                        setConnectingStripe(false);
                                     }
                                 }}
                             >
-                                連携する
+                                {connectingStripe ? (
+                                    <>
+                                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                        連携中...
+                                    </>
+                                ) : (
+                                    "連携する"
+                                )}
                             </Button>
                         )}
                     </div>

@@ -179,6 +179,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 toast.error(msg);
             } else if (e.code === 'auth/popup-closed-by-user') {
                 toast.info("ログインがキャンセルされました");
+            } else if (e.code === 'auth/cancelled-popup-request') {
+                // 複数回クリックや別ポップアップでキャンセルされた場合
+                toast.info("ログインがキャンセルされました。もう一度お試しください");
             } else {
                 toast.error("ログインエラー: " + e.message);
                 setError(e.message);

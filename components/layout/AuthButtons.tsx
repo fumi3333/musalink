@@ -18,6 +18,7 @@ export const AuthButtons = () => {
     const { user, login, logout, loading, error, debugLogin, unreadNotifications } = useAuth();
     const [showErrorDialog, setShowErrorDialog] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     // Watch for errors returned by useAuth
     React.useEffect(() => {
@@ -34,9 +35,23 @@ export const AuthButtons = () => {
         // ... (Guest Buttons kept same)
         return (
             <div className="flex gap-2">
-                <Button onClick={login} variant="default" size="sm" className="bg-violet-600 text-white font-bold">
+                <Button
+                    onClick={async () => {
+                        if (isLoggingIn) return;
+                        setIsLoggingIn(true);
+                        try {
+                            await login();
+                        } finally {
+                            setIsLoggingIn(false);
+                        }
+                    }}
+                    disabled={isLoggingIn}
+                    variant="default"
+                    size="sm"
+                    className="bg-violet-600 text-white font-bold"
+                >
                     <LogIn className="w-4 h-4 mr-2" />
-                    ログイン
+                    {isLoggingIn ? "ログイン中..." : "ログイン"}
                 </Button>
 
                 {/* TEST MODE ACCOUNTS */}
