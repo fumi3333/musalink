@@ -126,21 +126,15 @@ export default function PayoutPage() {
                         {userData?.stripe_connect_id ? (
                             <div className="flex gap-2">
                              <Button variant="outline" size="sm" className="text-xs h-8" onClick={async () => {
-                                 // Dashboard Link (Login Link)
                                  const { httpsCallable } = await import('firebase/functions');
                                  const { functions } = await import('@/lib/firebase');
                                  toast.info("ダッシュボードを開いています...");
                                  try {
-                                     // Use dedicated Login Link function
                                      const createLink = httpsCallable(functions, 'createStripeLoginLink');
                                      const res = await createLink({ 
                                          accountId: userData.stripe_connect_id 
                                      }) as any;
-                                     
-                                     if (res.data.error) {
-                                         throw new Error(res.data.error);
-                                     }
-                                     
+                                     if (res.data.error) throw new Error(res.data.error);
                                      window.location.href = res.data.url;
                                  } catch(e: any) { 
                                      console.error(e);
@@ -149,19 +143,22 @@ export default function PayoutPage() {
                              }}>
                                  設定
                              </Button>
-                             {/* Debug: Disconnect Button */}
                              <Button variant="ghost" size="sm" className="text-xs h-8 text-red-400 hover:text-red-500 hover:bg-red-50" onClick={async () => {
                                  if(!confirm("連携を解除しますか？\n（IDをリセットします。Stripeアカウント自体は削除されません）")) return;
-                                 const { doc, updateDoc } = await import('firebase/firestore');
+                                 const { doc, updateDoc, setDoc } = await import('firebase/firestore');
                                  const { db } = await import('@/lib/firebase');
                                  try {
                                      await updateDoc(doc(db, "users", userData.id), {
                                          stripe_connect_id: null,
                                          charges_enabled: false
                                      });
+                                     await setDoc(doc(db, "users", userData.id, "private_data", "profile"), {
+                                         stripe_connect_id: null,
+                                         charges_enabled: false
+                                     }, { merge: true });
                                      toast.success("連携を解除しました");
                                      window.location.reload();
-                                 } catch(e) { toast.error("解除エラー"); }
+                                 } catch(e: any) { toast.error("解除エラー: " + e.message); }
                              }}>
                                  解除
                              </Button>
@@ -236,6 +233,30 @@ export default function PayoutPage() {
                             </Button>
                         )}
                     </div>
+
+                    {/* 連携状態をリセット（未連携表示でも private_data に残っている場合用） */}
+                    {!userData?.stripe_connect_id && (
+                        <div className="text-center">
+                            <button
+                                className="text-[10px] text-slate-400 underline hover:text-red-400"
+                                onClick={async () => {
+                                    if(!confirm("Stripe連携データをリセットしますか？")) return;
+                                    const { doc, setDoc: setDocFn } = await import('firebase/firestore');
+                                    const { db: dbRef } = await import('@/lib/firebase');
+                                    try {
+                                        await setDocFn(doc(dbRef, "users", userData.id, "private_data", "profile"), {
+                                            stripe_connect_id: null,
+                                            charges_enabled: false
+                                        }, { merge: true });
+                                        toast.success("リセットしました。再度「連携する」をお試しください");
+                                        window.location.reload();
+                                    } catch(e: any) { toast.error("リセットエラー: " + e.message); }
+                                }}
+                            >
+                                連携がうまくいかない場合はこちらでリセット
+                            </button>
+                        </div>
+                    )}
 
                     <div className="pt-4 border-t border-slate-100">
                         <Button
