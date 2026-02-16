@@ -110,10 +110,15 @@ export default function PayoutPage() {
                             </div>
                             <div>
                                 <p className="font-bold text-sm text-slate-700">ストライプ連携</p>
-                                {userData?.stripe_connect_id ? (
+                                {userData?.stripe_connect_id && userData?.charges_enabled ? (
                                     <p className="text-xs text-green-600 font-medium flex items-center">
                                         <CheckCircle className="w-3 h-3 mr-1" />
-                                        連携済み
+                                        連携済み（受取可能）
+                                    </p>
+                                ) : userData?.stripe_connect_id ? (
+                                    <p className="text-xs text-amber-600 font-medium flex items-center">
+                                        <AlertTriangle className="w-3 h-3 mr-1" />
+                                        登録中（オンボーディング未完了）
                                     </p>
                                 ) : (
                                     <p className="text-xs text-slate-500">
@@ -123,46 +128,82 @@ export default function PayoutPage() {
                             </div>
                         </div>
                         
-                        {userData?.stripe_connect_id ? (
-                            <div className="flex gap-2">
-                             <Button variant="outline" size="sm" className="text-xs h-8" onClick={async () => {
-                                 const { httpsCallable } = await import('firebase/functions');
-                                 const { functions } = await import('@/lib/firebase');
-                                 toast.info("ダッシュボードを開いています...");
-                                 try {
-                                     const createLink = httpsCallable(functions, 'createStripeLoginLink');
-                                     const res = await createLink({ 
-                                         accountId: userData.stripe_connect_id 
-                                     }) as any;
-                                     if (res.data.error) throw new Error(res.data.error);
-                                     window.location.href = res.data.url;
-                                 } catch(e: any) { 
-                                     console.error(e);
-                                     toast.error("リンク作成エラー: " + e.message); 
-                                 }
-                             }}>
-                                 設定
-                             </Button>
-                             <Button variant="ghost" size="sm" className="text-xs h-8 text-red-400 hover:text-red-500 hover:bg-red-50" onClick={async () => {
-                                 if(!confirm("連携を解除しますか？\n（IDをリセットします。Stripeアカウント自体は削除されません）")) return;
-                                 const { doc, updateDoc, setDoc } = await import('firebase/firestore');
-                                 const { db } = await import('@/lib/firebase');
-                                 try {
-                                     await updateDoc(doc(db, "users", userData.id), {
-                                         stripe_connect_id: null,
-                                         charges_enabled: false
-                                     });
-                                     await setDoc(doc(db, "users", userData.id, "private_data", "profile"), {
-                                         stripe_connect_id: null,
-                                         charges_enabled: false
-                                     }, { merge: true });
-                                     toast.success("連携を解除しました");
-                                     window.location.reload();
-                                 } catch(e: any) { toast.error("解除エラー: " + e.message); }
-                             }}>
-                                 解除
-                             </Button>
-                            </div>
+                        {userData?.stripe_connect_id && userData?.charges_enabled ? (
+                            /* オンボーディング完了 → Stripe ダッシュボードへ */
+                            <Button variant="outline" size="sm" className="text-xs h-8" onClick={async () => {
+                                const { httpsCallable } = await import('firebase/functions');
+                                const { functions } = await import('@/lib/firebase');
+                                toast.info("ダッシュボードを開いています...");
+                                try {
+                                    const createLink = httpsCallable(functions, 'createStripeLoginLink');
+                                    const res = await createLink({ 
+                                        accountId: userData.stripe_connect_id 
+                                    }) as any;
+                                    if (res.data.error) throw new Error(res.data.error);
+                                    window.location.href = res.data.url;
+                                } catch(e: any) { 
+                                    console.error(e);
+                                    toast.error("リンク作成エラー: " + e.message); 
+                                }
+                            }}>
+                                設定
+                            </Button>
+                        ) : userData?.stripe_connect_id ? (
+                            /* アカウントはあるがオンボーディング未完了 → 続きから */
+                            <Button 
+                                size="sm" 
+                                className="text-xs h-8 bg-amber-500 hover:bg-amber-600 text-white"
+                                disabled={connectingStripe}
+                                onClick={async () => {
+                                    if(!userData?.id || connectingStripe) return;
+                                    setConnectingStripe(true);
+                                    const targetUrl = `${FUNCTIONS_BASE_URL}/executeStripeConnect`;
+                                    try {
+                                        if (!auth.currentUser) throw new Error("ログインしていません。");
+                                        const idToken = await getIdToken(auth.currentUser, true);
+                                        const res = await fetch(targetUrl, {
+                                            method: 'POST',
+                                            headers: {
+                                                'Authorization': `Bearer ${idToken}`,
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({
+                                                email: userData.email || userData.university_email,
+                                                returnUrl: window.location.href,
+                                                refreshUrl: window.location.href
+                                            })
+                                        });
+                                        if (!res.ok) {
+                                            const errorText = await res.text();
+                                            let errorMsg = `サーバーエラー (${res.status})`;
+                                            try { errorMsg = JSON.parse(errorText).error || errorMsg; } catch {}
+                                            throw new Error(errorMsg);
+                                        }
+                                        const data = await res.json();
+                                        if (data.url) {
+                                            toast.success("登録画面へ移動します");
+                                            window.location.href = data.url;
+                                        } else {
+                                            throw new Error("レスポンスにURLが含まれていません");
+                                        }
+                                    } catch(e: any) {
+                                        console.error(e);
+                                        let msg = e.message || "不明なエラー";
+                                        if (e instanceof TypeError && e.message.includes("fetch")) {
+                                            msg = "通信エラー: Cloud Functionに接続できませんでした";
+                                        }
+                                        toast.error(msg, { duration: 8000 });
+                                    } finally {
+                                        setConnectingStripe(false);
+                                    }
+                                }}
+                            >
+                                {connectingStripe ? (
+                                    <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />登録中...</>
+                                ) : (
+                                    "登録を続ける"
+                                )}
+                            </Button>
                         ) : (
                             <Button 
                                 size="sm" 
@@ -234,29 +275,6 @@ export default function PayoutPage() {
                         )}
                     </div>
 
-                    {/* 連携状態をリセット（未連携表示でも private_data に残っている場合用） */}
-                    {!userData?.stripe_connect_id && (
-                        <div className="text-center">
-                            <button
-                                className="text-[10px] text-slate-400 underline hover:text-red-400"
-                                onClick={async () => {
-                                    if(!confirm("Stripe連携データをリセットしますか？")) return;
-                                    const { doc, setDoc: setDocFn } = await import('firebase/firestore');
-                                    const { db: dbRef } = await import('@/lib/firebase');
-                                    try {
-                                        await setDocFn(doc(dbRef, "users", userData.id, "private_data", "profile"), {
-                                            stripe_connect_id: null,
-                                            charges_enabled: false
-                                        }, { merge: true });
-                                        toast.success("リセットしました。再度「連携する」をお試しください");
-                                        window.location.reload();
-                                    } catch(e: any) { toast.error("リセットエラー: " + e.message); }
-                                }}
-                            >
-                                連携がうまくいかない場合はこちらでリセット
-                            </button>
-                        </div>
-                    )}
 
                     <div className="pt-4 border-t border-slate-100">
                         <Button
