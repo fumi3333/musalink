@@ -21,7 +21,7 @@ export function Footer() {
 
                 </div>
                 <div>
-                    &copy; 2026 Musa Project
+                    &copy; 2026 Musalink
                 </div>
             </div>
         </footer>

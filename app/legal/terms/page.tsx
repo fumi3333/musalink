@@ -8,7 +8,7 @@ export default function TermsPage() {
 
             <section>
                 <h2 className="text-lg font-bold text-slate-700 mt-4 mb-2">1. サービスの目的</h2>
-                <p>Musa（以下「本サービス」）は、武蔵野大学の学生間における教科書および学用品の売買を支援するマッチングプラットフォームです。</p>
+                <p>Musalink（以下「本サービス」）は、武蔵野大学の学生間における教科書および学用品の売買を支援するマッチングプラットフォームです。</p>
             </section>
 
             <section>

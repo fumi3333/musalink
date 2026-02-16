@@ -67,7 +67,7 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
         return `${sellerName}${verifiedTag} 先輩
 
 本日、${itemName} をお譲りいただき、感謝いたします。
-Musaで連絡先を確認しました。
+Musalinkで連絡先を確認しました。
 受け渡し場所の相談などをさせていただきたく存じます。${placeText}
 
 学部・学科

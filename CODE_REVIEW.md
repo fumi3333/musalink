@@ -1,4 +1,4 @@
-# Musa（武蔵野大学 教科書マッチング） 詳細コードレビュー
+# Musalink（武蔵野大学 教科書マッチング） 詳細コードレビュー
 
 **レビュー日**: 2026年2月  
 **対象**: フロントエンド (Next.js 16) / Firebase (Auth, Firestore, Functions) / Stripe Connect  

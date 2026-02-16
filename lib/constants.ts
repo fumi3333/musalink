@@ -1,4 +1,4 @@
-export const APP_NAME = "Musa";
+export const APP_NAME = "Musalink";
 
 // 費用の設定
 // 費用の設定

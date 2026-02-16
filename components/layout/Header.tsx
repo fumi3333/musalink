@@ -26,7 +26,7 @@ export const Header = () => {
                         M
                     </div>
                     <span className="font-bold text-xl tracking-tight text-slate-800">
-                        Musa
+                        Musalink
                     </span>
                 </Link>
 

@@ -26,7 +26,7 @@ async function sendEmail(to: string, subject: string, text: string, html?: strin
     }
 
     const mailOptions = {
-        from: `"Musa" <${gmailEmail}>`,
+        from: `"Musalink" <${gmailEmail}>`,
         to: to,
         subject: subject,
         text: text,
@@ -65,7 +65,7 @@ export const onTransactionCreated = functions.firestore
         const itemDoc = await db.collection("items").doc(tx.item_id).get();
         const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
-        const subject = `【Musa】商品「${itemTitle}」が購入されました！`;
+        const subject = `【Musalink】商品「${itemTitle}」が購入されました！`;
         const text = `${seller.display_name}様\n\nあなたの出品した「${itemTitle}」に購入リクエストが入りました！\n\nアプリを開いて確認・承認してください。\nhttps://musa-link.web.app/transactions/detail?id=${context.params.transactionId}`;
 
         // 1. Create In-App Notification
@@ -111,7 +111,7 @@ export const onMessageCreated = functions.firestore
         // Rate Limit / Spam Prevention Logic?
         // Check local "Do Not Disturb"? (Skipped for MVP)
 
-        const subject = `【Musa】新着メッセージが届きました`;
+        const subject = `【Musalink】新着メッセージが届きました`;
         const text = `${recipient.display_name}様\n\n取引相手からメッセージが届きました。\n\n「${msg.text.substring(0, 50)}${msg.text.length > 50 ? '...' : ''}」\n\n返信はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${conversationId}#chat`;
 
         // 1. Create In-App Notification
@@ -155,7 +155,7 @@ export const onTransactionUpdated = functions.firestore
             const itemDoc = await db.collection("items").doc(after.item_id).get();
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
-            const subject = `【Musa】購入リクエストが承認されました！`;
+            const subject = `【Musalink】購入リクエストが承認されました！`;
             const text = `${buyer.display_name}様\n\n「${itemTitle}」の購入リクエストが承認されました。\n\n以下のリンクから支払いを完了させてください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}`;
 
             // In-App
@@ -187,7 +187,7 @@ export const onTransactionUpdated = functions.firestore
             const itemDoc = await db.collection("items").doc(after.item_id).get();
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
-            const subject = `【Musa】支払いが完了しました（${itemTitle}）`;
+            const subject = `【Musalink】支払いが完了しました（${itemTitle}）`;
             const text = `${seller.display_name}様\n\n「${itemTitle}」の支払いが完了し、取引が成立しました。\n\n購入者と連絡を取り、商品の受け渡しを行ってください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}`;
 
             // In-App

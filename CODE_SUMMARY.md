@@ -1,4 +1,4 @@
-# Musa（musalink）コード全体まとめ
+# Musalink コード全体まとめ
 
 **武蔵野大学 学生専用 教科書マッチングプラットフォーム** のコードベースを一覧でまとめたドキュメントです。
 
@@ -8,7 +8,7 @@
 
 | 項目 | 内容 |
 |------|------|
-| 名称 | Musa（ムサ） / musalink |
+| 名称 | Musalink（ムサリンク） |
 | 本番URL | https://musalink.vercel.app |
 | フロント | Next.js 16 (App Router), React 19, TypeScript |
 | バックエンド | Firebase (Auth, Firestore, Functions), Stripe Connect |
@@ -214,15 +214,132 @@ musashino link/
 
 ---
 
-## 6. 関連ドキュメント
+## 6. 決済（Payment）まわりのコード詳細
+
+### 6.1 決済の流れ（Auth → Capture）
+
+1. **購入者が「支払う」**  
+   → 取引詳細で「100円を支払う」を押す  
+   → `TransactionDetailView` が `clientSecret` を取得するため **`/api/create-payment-intent`** を呼ぶ  
+   → Next.js API Route が **Cloud Functions `createPaymentIntent`** に Bearer トークン付きで転送  
+
+2. **Payment Intent 作成（Functions）**  
+   → `functions/src/index.ts` の **`createPaymentIntent`**（`onRequest`）  
+   → 認証（Bearer ID Token）・取引・売り手・商品を検証  
+   → Stripe で **`capture_method: 'manual'`** の Payment Intent 作成（仮押さえのみ）  
+   → 本物の売り手なら `transfer_data.destination` と `application_fee_amount` を設定  
+   → `transactions` に `payment_intent_id` を保存し、**`clientSecret`** を返す  
+
+3. **クライアントでカード入力・確認**  
+   → **`StripePaymentForm`**（`@stripe/react-stripe-js`）  
+   → `stripe.confirmPayment()` で **Auth（仮押さえ）** まで実行  
+   → 成功したら **`updateTransactionStatus(transactionId, 'payment_pending')`** で Firestore を `payment_pending` に更新  
+
+4. **受け渡し後の Capture（入金確定）**  
+   → 買い手が売り手の **QR コード** をスキャン、または「受取確認」ボタン  
+   → **`TransactionDetailView`** 内の `handleCapturePayment()`  
+   → **`httpsCallable(functions, 'capturePayment')`** に `{ transactionId }` を渡して呼ぶ  
+   → **`functions/src/index.ts` の `capturePayment`**（`onCall`）  
+   → Firestore トランザクション内で `stripe.paymentIntents.capture(paymentIntentId)`  
+   → 成功したら取引を `completed` にし、**`unlocked_assets`**（学籍番号・大学メール）を **`users/{id}/private_data/profile`** から取得して保存  
+
+5. **キャンセル・返金**  
+   → `cancelTransaction`（Callable）で取引を `cancelled` にし、Payment Intent を cancel または refund  
+   → **Stripe Webhook**（`stripeWebhook`）で `account.updated` や 他イベントを処理  
+
+### 6.2 決済まわりのファイル一覧
+
+| 役割 | ファイル | 説明 |
+|------|----------|------|
+| フロント：決済フォーム | `components/transaction/StripePaymentForm.tsx` | Payment Element → `confirmPayment` → 成功時に `payment_pending` へ更新 |
+| フロント：取引詳細 | `components/transaction/TransactionDetailView.tsx` | Payment Intent 取得・Stripe Elements 表示・QR スキャン・`capturePayment` 呼び出し |
+| API：Payment Intent 取得 | `app/api/create-payment-intent/route.ts` | クライアントの Bearer を転送して Cloud Functions `createPaymentIntent` を呼ぶ（CORS 回避） |
+| API：Unlock（フォールバック） | `app/api/unlock-transaction/route.ts` | 手動アンロック用。Bearer を転送して `unlockTransaction` を呼ぶ |
+| API：Stripe Connect | `app/api/stripe-connect/route.ts` | 振込用 Stripe Connect アカウント作成・ログインリンク取得のプロキシ |
+| Functions：PI 作成 | `functions/src/index.ts`（createPaymentIntent） | onRequest。認証・レート制限・取引検証 → Stripe PI 作成（manual capture） |
+| Functions：Capture | `functions/src/index.ts`（capturePayment） | onCall。買い手のみ・payment_pending のみ。Stripe capture → 取引 completed + unlocked_assets |
+| Functions：Unlock | `functions/src/index.ts`（unlockTransaction） | onRequest。手動アンロック（Capture しない場合のフォールバック） |
+| Functions：キャンセル | `functions/src/index.ts`（cancelTransaction） | onCall。PI cancel / refund → 取引 cancelled |
+| Functions：Webhook | `functions/src/index.ts`（stripeWebhook） | Stripe イベント（account.updated 等）受信・検証 |
+| Stripe クライアント | `lib/stripe.ts` | `loadStripe(NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)` で `stripePromise` を提供 |
+| 手数料定数 | `lib/constants.ts` | `SYSTEM_FEE`, `calculateFee(price)`（100円固定） |
+
+### 6.3 決済で使う Firestore / Stripe
+
+- **Firestore**  
+  - `transactions/{id}`: `status`（approved → payment_pending → completed）, `payment_intent_id`, `unlocked_assets`  
+  - `users/{id}`: `stripe_connect_id`, `charges_enabled`（売り手の Stripe Connect 状態）  
+  - `users/{id}/private_data/profile`: 学籍番号・大学メール（Capture 時にここから取得して `unlocked_assets` に保存）  
+- **Stripe**  
+  - Payment Intent: `capture_method: 'manual'` → 先に Auth、受け渡し後に Capture  
+  - Connect: 本番売り手は `transfer_data.destination` + `application_fee_amount`。モック売り手（`acct_mock_*`）は Platform に留める  
+
+---
+
+## 7. その他いろんなコード（簡易リファレンス）
+
+### 認証・ユーザー
+
+| コード | 場所 | 役割 |
+|--------|------|------|
+| ログイン・userData | `contexts/AuthContext.tsx` | Google ログイン、users + private_data マージ、`userData.id` 付与 |
+| 学内ドメイン制限 | `lib/auth.ts` | `ALLOWED_DOMAIN`（stu.musashino-u.ac.jp）チェック |
+| Firebase 初期化 | `lib/firebase.ts` | auth, db, storage, functions, analytics |
+
+### 出品・一覧・詳細
+
+| コード | 場所 | 役割 |
+|--------|------|------|
+| 一覧・フィルタ | `app/items/page.tsx` | getItems（category, 学部, 学年）、ItemCard 一覧 |
+| 詳細 | `app/items/[id]/page.tsx` | getItem, 売り手取得、カテゴリーバッジ、購入リクエストへ |
+| 新規出品 | `app/items/create/page.tsx` | カテゴリー選択、book 時のみ ISBN・著者・授業名、createItem、Storage 画像 |
+| カード | `components/listing/ItemCard.tsx` | カテゴリータグ、価格、画像 |
+| データ取得 | `services/firestore.ts` | getItems（category 対応）, getItem, createItem |
+
+### 取引（決済以外）
+
+| コード | 場所 | 役割 |
+|--------|------|------|
+| 新規取引 | `app/transactions/new/page.tsx` | 利用規約同意、createTransaction |
+| 取引詳細ページ | `app/transactions/detail/page.tsx` | getTransaction, getItem, 売り手取得、clientSecret 取得、TransactionDetailView |
+| ステップ表示 | `components/transaction/TransactionStepper.tsx` | リクエスト→予約・調整→受渡・完了 |
+| 場所選択 | `components/transaction/MeetingPlaceSelector.tsx` | 受け渡し場所 |
+| アンロック後表示 | `components/transaction/RevealableContent.tsx` | 学籍番号・メールの表示 |
+| チャット | `components/chat/ChatRoom.tsx` | conversations/{txId}/messages |
+
+### 売り手・振込・管理
+
+| コード | 場所 | 役割 |
+|--------|------|------|
+| 振込 | `app/seller/payout/page.tsx` | Stripe Connect 連携・ログインリンク、payout_requests 作成 |
+| 管理ダッシュボード | `app/admin/page.tsx` | ユーザー数・出品数・取引数 |
+| 取引管理 | `app/admin/transactions/page.tsx` | 一覧・強制キャンセル（adminCancelTransaction） |
+
+### 型・定数
+
+| コード | 場所 | 役割 |
+|--------|------|------|
+| 型定義 | `types/index.ts` | User, Item, Transaction, Notification, TransactionStatus, ItemCategory |
+| 定数・手数料・カテゴリー | `lib/constants.ts` | APP_NAME, SYSTEM_FEE, calculateFee, ITEM_CATEGORIES, getItemCategoryLabel |
+
+### Firestore ルール
+
+| コード | 場所 | 役割 |
+|--------|------|------|
+| セキュリティ | `firestore.rules` | users/items/transactions/conversations/payout_requests の read/write、isVerifiedStudent（匿名不可）、payment_pending→completed は Functions のみ |
+
+---
+
+## 8. 関連ドキュメント
 
 | ファイル | 内容 |
 |----------|------|
 | [README.md](./README.md) | プロジェクト概要・本番URL・機能・技術スタック |
 | [CODE_REVIEW.md](./CODE_REVIEW.md) | 詳細コードレビュー・改善提案 |
+| [SECURITY_AND_FEEDBACK.md](./SECURITY_AND_FEEDBACK.md) | セキュリティ対応・フィードバック方針 |
 | [DEVELOPMENT.md](./DEVELOPMENT.md) | 開発手順・環境 |
 | [MANUAL.md](./MANUAL.md) | 運用マニュアル |
 
 ---
 
-© 2026 Musa Project
+© 2026 Musalink
