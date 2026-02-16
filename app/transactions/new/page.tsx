@@ -74,11 +74,16 @@ function NewTransactionContent() {
                         <p className="text-slate-600">¥{item.price.toLocaleString()}</p>
                     </div>
 
-                    {/* [Self-Trading Block] - Removed for testing */}
-                    
-                    <p className="text-sm text-slate-500">
-                        取引を開始すると、商品ステータスが「Matching」に変更され、手数料の支払いプロセスへ進みます。
-                    </p>
+                    {/* [Self-Trading Block] - RESTORED FOR PRODUCTION */}
+                    {userData?.id === item.seller_id && !userData?.is_demo ? (
+                        <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm font-bold border border-red-200">
+                            自分の商品は購入できません
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-sm text-slate-500">
+                                取引を開始すると、商品ステータスが「Matching」に変更され、手数料の支払いプロセスへ進みます。
+                            </p>
 
                     {/* [Disclaimer Check] */}
                     <div className="bg-amber-50 p-3 rounded-md border border-amber-200">
