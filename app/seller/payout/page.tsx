@@ -20,11 +20,37 @@ export default function PayoutPage() {
     // Bank Account State (Mocked)
     // const [bankInfo, setBankInfo] = useState(...);
 
+    const [syncing, setSyncing] = useState(false);
+
     useEffect(() => {
         if (userData) {
             setBalance(userData.coin_balance || 0);
         }
     }, [userData]);
+
+    // Stripe から戻ってきたときに自動でステータスを同期
+    useEffect(() => {
+        const syncStatus = async () => {
+            if (!userData?.id || !userData?.stripe_connect_id) return;
+            if (userData?.charges_enabled) return; // 既に有効なら不要
+            setSyncing(true);
+            try {
+                const { httpsCallable } = await import('firebase/functions');
+                const { functions } = await import('@/lib/firebase');
+                const syncFn = httpsCallable(functions, 'syncStripeStatus');
+                const result = await syncFn({}) as any;
+                if (result.data?.charges_enabled) {
+                    toast.success("Stripe連携が完了しました！ページを更新します...");
+                    setTimeout(() => window.location.reload(), 1500);
+                }
+            } catch (e) {
+                console.error("[syncStripeStatus] Error:", e);
+            } finally {
+                setSyncing(false);
+            }
+        };
+        syncStatus();
+    }, [userData?.id, userData?.stripe_connect_id, userData?.charges_enabled]);
 
     const handleRequestPayout = async () => {
         if (balance < 1000) {
@@ -117,8 +143,11 @@ export default function PayoutPage() {
                                     </p>
                                 ) : userData?.stripe_connect_id ? (
                                     <p className="text-xs text-amber-600 font-medium flex items-center">
-                                        <AlertTriangle className="w-3 h-3 mr-1" />
-                                        登録中（オンボーディング未完了）
+                                        {syncing ? (
+                                            <><Loader2 className="w-3 h-3 mr-1 animate-spin" />ステータス確認中...</>
+                                        ) : (
+                                            <><AlertTriangle className="w-3 h-3 mr-1" />登録中（オンボーディング未完了）</>
+                                        )}
                                     </p>
                                 ) : (
                                     <p className="text-xs text-slate-500">
