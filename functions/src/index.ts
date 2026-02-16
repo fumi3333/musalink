@@ -111,39 +111,49 @@ export const executeStripeConnect = functions.https.onRequest(async (req, res) =
         const body = CreateAccountSchema.parse(req.body);
         const { email, returnUrl, refreshUrl } = body;
 
-        // 3. Create Account
-        const account = await stripe.accounts.create({
-            type: 'express', 
-            country: 'JP',
-            email: email,
-            capabilities: {
-              card_payments: {requested: true},
-              transfers: {requested: true},
-            },
-        });
+        // Check if user already has a Stripe Connect account
+        const privateDoc = await db.collection('users').doc(userId).collection('private_data').doc('profile').get();
+        const existingStripeId = privateDoc.exists ? privateDoc.data()?.stripe_connect_id : null;
 
-        // 4. Save to Firestore (Private Data)
-        // Securely store Stripe Account ID in private_data subcollection
-        await db.collection('users').doc(userId).collection('private_data').doc('profile').set({
-            stripe_connect_id: account.id,
-            charges_enabled: false,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        let accountId: string;
 
-        // [Lookup Map] Create reverse mapping for Webhooks (Stripe ID -> User ID)
-        // This avoids needing Collection Group Indices on private_data
-        await db.collection('stripe_accounts').doc(account.id).set({
-            userId: userId,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+        if (existingStripeId) {
+            // Already has an account - reuse it (generate new onboarding link)
+            console.log(`[Stripe Connect] User ${userId} already has account ${existingStripeId}, generating new link`);
+            accountId = existingStripeId;
+        } else {
+            // 3. Create new Account
+            const account = await stripe.accounts.create({
+                type: 'express', 
+                country: 'JP',
+                email: email,
+                capabilities: {
+                  card_payments: {requested: true},
+                  transfers: {requested: true},
+                },
+            });
+            accountId = account.id;
 
-        // 5. Create Link
-        // Use Configured URL or Default (Validate in Production)
+            // 4. Save to Firestore (Private Data)
+            await db.collection('users').doc(userId).collection('private_data').doc('profile').set({
+                stripe_connect_id: accountId,
+                charges_enabled: false,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            // [Lookup Map] Create reverse mapping for Webhooks (Stripe ID -> User ID)
+            await db.collection('stripe_accounts').doc(accountId).set({
+                userId: userId,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        // 5. Create Link (works for both new and existing accounts)
         const appUrl = functions.config().app?.url || "http://localhost:3000"; 
         const itemsUrl = `${appUrl}/seller/payout`;
 
         const accountLink = await stripe.accountLinks.create({
-            account: account.id,
+            account: accountId,
             refresh_url: refreshUrl || itemsUrl,
             return_url: returnUrl || itemsUrl,
             type: 'account_onboarding',
