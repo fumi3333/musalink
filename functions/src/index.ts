@@ -1,121 +1,192 @@
-// ==========================================
-// ★本番リリース時の設定 (Production Config)
-// ==========================================
-// 本番運用（Stripe本番環境）に切り替える際は、以下の値を false に変更してください。
-// To switch to Production, change this to false.
-const ENABLE_MOCK_ACCOUNT_FLOW = true;
-// ==========================================
+
+
+// Load Environment Variables
+require('dotenv').config();
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
+import { allowedOrigins } from "./config";
+
+
 
 // Debug Env
 // console.log("Stripe Key Configured:", !!functions.config().stripe);
 
 const config = functions.config() as any;
 
-if (!config.stripe || !config.stripe.secret) {
-    console.warn("Stripe Config is missing! Run: firebase functions:config:set stripe.secret='sk_test_...'");
+const stripeSecret = config.stripe?.secret || process.env.STRIPE_SECRET_KEY;
+
+if (!stripeSecret) {
+    console.warn("Stripe Config is missing! Run: firebase functions:config:set stripe.secret='sk_test_...' or set STRIPE_SECRET_KEY in functions/.env");
 }
 
-const stripe = new Stripe(config.stripe ? config.stripe.secret : "dummy_key_check_env", {
+const stripe = new Stripe(stripeSecret || "dummy_key_check_env", {
     apiVersion: "2024-06-20" as any,
 });
 
 admin.initializeApp();
 const db = admin.firestore();
 
+import { z } from "zod";
+import { calculateFee } from "./utils";
+import { handleError, handleCallableError } from "./errorUtils";
+
 // [New] Create Stripe Connect Account
-export const createStripeConnectAccount = functions.https.onCall(async (data: any, _context: functions.https.CallableContext) => {
-    const { userId } = data;
-
-    if (!userId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing userId');
-    }
-
-    // [Beta Test Strategy] Force Mock based on Config
-    if (ENABLE_MOCK_ACCOUNT_FLOW) {
-        console.log(`[Mock] Creating fake Connect account for ${userId} (Reason: ENABLE_MOCK_ACCOUNT_FLOW = true)`);
-        const mockAccountId = `acct_mock_${userId}`;
-
-        await db.collection('users').doc(userId).set({
-            stripe_connect_id: mockAccountId,
-            charges_enabled: true // Auto-enable for demo
-        }, { merge: true });
-
-        return { accountId: mockAccountId };
-    }
-
-    // [Production] Real Stripe Connect Account Creation
-    // Note: For Standard Connect, we typically create an Account Link directly?
-    // Or we create an account first.
-    // Standard Connect usually starts with OAuth or Account creation.
-    // For Express/Standard on-boarding:
-    try {
-        const account = await stripe.accounts.create({
-            type: 'standard', // or 'express'
-            country: 'JP',
-            email: data.email, // If passed
-        });
-
-        // Save real account ID
-        await db.collection('users').doc(userId).set({
-            stripe_connect_id: account.id,
-            charges_enabled: false // Waiting for onboarding
-        }, { merge: true });
-
-        return { accountId: account.id };
-    } catch (e: any) {
-        console.error("Stripe Account Create Error", e);
-        throw new functions.https.HttpsError('internal', e.message);
-    }
+const CreateAccountSchema = z.object({
+    email: z.string().email(),
+    returnUrl: z.string().url().optional(),
+    refreshUrl: z.string().url().optional(),
 });
 
-export const createStripeAccountLink = functions.https.onCall(async (data, context) => {
-    const accountId = data.accountId;
-    const returnUrl = data.returnUrl || "https://musa-link.web.app/seller/payout/callback";
-    const refreshUrl = data.refreshUrl || "https://musa-link.web.app/seller/payout"; // Needed for real link
-    const userId = context.auth?.uid; // Securely get UID
+const CreatePaymentIntentSchema = z.object({
+    transactionId: z.string().min(1),
+});
 
-    if (!accountId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing accountId');
+const CapturePaymentSchema = z.object({
+    transactionId: z.string().min(1),
+});
+
+const UnlockTransactionSchema = z.object({
+    transactionId: z.string().min(1),
+});
+
+const CancelTransactionSchema = z.object({
+    transactionId: z.string().min(1),
+    reason: z.string().optional(),
+});
+
+const RateUserSchema = z.object({
+    transactionId: z.string().min(1),
+    score: z.number().min(1).max(5),
+    role: z.enum(['buyer', 'seller']).optional(),
+});
+
+
+
+// Manual CORS Helper
+// Manual CORS Helper
+const applyCors = (req: functions.https.Request, res: functions.Response) => {
+    const origin = req.headers.origin;
+    
+    if (origin && allowedOrigins.includes(origin)) {
+        res.set('Access-Control-Allow-Origin', origin);
     }
+    
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-    // [Mock] Guest Bypass & Beta Stratgy
-    if (ENABLE_MOCK_ACCOUNT_FLOW && accountId.startsWith('acct_mock_')) {
-        console.log(`[Mock] Generating fake account link for ${accountId}`);
-        return { url: returnUrl };
+    if (req.method === 'OPTIONS') {
+        res.status(204).send('');
+        return true; // Handled
     }
+    return false; // Continue
+};
 
-    // [Fix] Legacy Account Reset logic... (Keep existing reset logical if needed, or remove if confident)
-    // If strict production, we might skip the reset logic. 
-    // But for safety, let's keep the Mock Trap if ENABLE_MOCK is true.
-    if (ENABLE_MOCK_ACCOUNT_FLOW && userId) {
-        // ... (Existing Reset Logic)
-        console.log(`[Fix] Resetting Legacy Account ${accountId} to Mock for ${userId}`);
-        const mockAccountId = `acct_mock_${userId}`;
-        await db.collection('users').doc(userId).set({
-            stripe_connect_id: mockAccountId,
-            charges_enabled: true
-        }, { merge: true });
-        return { url: returnUrl };
+export const executeStripeConnect = functions.https.onRequest(async (req, res) => {
+    if (applyCors(req, res)) return;
+
+    // 1. Auth Check
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).send('Unauthorized');
+        return;
     }
-
-    // [Production] Real Account Link
+    const idToken = authHeader.split('Bearer ')[1];
+    let userId;
     try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken, true);
+        userId = decodedToken.uid;
+    } catch (error: any) {
+        if (error.code === 'auth/id-token-revoked') {
+            res.status(401).send('Token has been revoked. Please re-authenticate.');
+        } else {
+            res.status(401).send('Invalid Token');
+        }
+        return;
+    }
+
+    try {
+        // 2. Extract Data
+        const body = CreateAccountSchema.parse(req.body);
+        const { email, returnUrl, refreshUrl } = body;
+
+        // 3. Create Account
+        const account = await stripe.accounts.create({
+            type: 'express', 
+            country: 'JP',
+            email: email,
+            capabilities: {
+              card_payments: {requested: true},
+              transfers: {requested: true},
+            },
+        });
+
+        // 4. Save to Firestore (Private Data)
+        // Securely store Stripe Account ID in private_data subcollection
+        await db.collection('users').doc(userId).collection('private_data').doc('profile').set({
+            stripe_connect_id: account.id,
+            charges_enabled: false,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // [Lookup Map] Create reverse mapping for Webhooks (Stripe ID -> User ID)
+        // This avoids needing Collection Group Indices on private_data
+        await db.collection('stripe_accounts').doc(account.id).set({
+            userId: userId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 5. Create Link
+        // Use Configured URL or Default (Validate in Production)
+        const appUrl = functions.config().app?.url || "http://localhost:3000"; 
+        const itemsUrl = `${appUrl}/seller/payout`;
+
         const accountLink = await stripe.accountLinks.create({
-            account: accountId,
-            refresh_url: refreshUrl,
-            return_url: returnUrl,
+            account: account.id,
+            refresh_url: refreshUrl || itemsUrl,
+            return_url: returnUrl || itemsUrl,
             type: 'account_onboarding',
         });
-        return { url: accountLink.url };
-    } catch (e: any) {
-        console.error("Stripe Account Link Error", e);
-        throw new functions.https.HttpsError('internal', e.message);
+
+        res.status(200).json({ url: accountLink.url });
+
+    } catch (e) {
+        handleError(res, e, "executeStripeConnect");
     }
 });
+
+export const createStripeLoginLink = functions.https.onCall(async (data, context) => {
+    // 1. Auth Check
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+    }
+    const userId = context.auth.uid;
+
+    try {
+        // 2. Fetch Secure Stripe ID from Private Data
+        // We do NOT trust the client to send the accountId.
+        const profileRef = db.collection('users').doc(userId).collection('private_data').doc('profile');
+        const profileSnap = await profileRef.get();
+
+        if (!profileSnap.exists) {
+             throw new functions.https.HttpsError('not-found', 'Stripe account not linked.');
+        }
+
+        const stripeConnectId = profileSnap.data()?.stripe_connect_id;
+        if (!stripeConnectId) {
+             throw new functions.https.HttpsError('failed-precondition', 'Stripe ID missing in profile.');
+        }
+
+        // 3. Create Link
+        const link = await stripe.accounts.createLoginLink(stripeConnectId);
+        return { url: link.url };
+
+    } catch (e) {
+        return handleCallableError(e, "createStripeLoginLink");
+    }
+});
+
 
 // 24時間反応がない取引を自動キャンセルする定時実行関数
 // 実行頻度: 60分ごと
@@ -232,23 +303,25 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
 
     // Buyer verification is implicit if payment succeeded for this transaction
 
-    // Get Seller info for Unlock
-    const sellerRef = db.collection("users").doc(tx.seller_id);
-    const sellerDoc = await t.get(sellerRef);
+    // Get Seller info for Unlock（個人情報は private_data のみから取得）
+    const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
+    const sellerPrivateDoc = await t.get(sellerPrivateRef);
 
-    if (!sellerDoc.exists) {
-        throw new functions.https.HttpsError('not-found', 'Seller profile not found.');
+    let studentId = "private";
+    let universityEmail = "private";
+    if (sellerPrivateDoc.exists) {
+        const privateData = sellerPrivateDoc.data()!;
+        studentId = privateData.student_id || privateData.email || studentId;
+        universityEmail = privateData.university_email || privateData.email || universityEmail;
     }
-
-    const seller = sellerDoc.data()!;
 
     // 2. Unlock & Update Transaction
     t.update(txRef, {
         status: 'completed',
         fee_amount: SYSTEM_FEE,
         unlocked_assets: {
-            student_id: seller.student_id || "private",
-            university_email: seller.university_email || "private",
+            student_id: studentId,
+            university_email: universityEmail,
             unlockedAt: admin.firestore.Timestamp.now()
         },
         updatedAt: admin.firestore.Timestamp.now()
@@ -261,46 +334,88 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
 }
 
 // [Phase 11] Create Payment Intent (Platform-Held / Hybrid)
-export const createPaymentIntent = functions.https.onCall(async (data, context) => {
-    // Auth Check
-    const userId = data.userId;
-    const transactionId = data.transactionId;
+// onRequest + Manual Auth (via API Route Proxy)
+export const createPaymentIntent = functions.https.onRequest(async (req, res) => {
+    if (applyCors(req, res)) return;
 
-    if (!userId || !transactionId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing userId or transactionId');
+    // 1. Method Check
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
     }
+
+    // 2. Auth Check (Manual)
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).send('Unauthorized: Missing or invalid token');
+        return;
+    }
+    const idToken = authHeader.split('Bearer ')[1];
+    let userId;
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken, true);
+        userId = decodedToken.uid;
+    } catch (error: any) {
+        console.error("Auth Error:", error);
+        if (error.code === 'auth/id-token-revoked') {
+            res.status(401).send('Unauthorized: Token has been revoked');
+        } else {
+            res.status(401).send('Unauthorized: Invalid token');
+        }
+        return;
+    }
+
+    // 3. Data Extraction
+    let transactionId: string;
+    try {
+        const body = CreatePaymentIntentSchema.parse(req.body);
+        transactionId = body.transactionId;
+    } catch (e: any) {
+         res.status(400).json({ error: 'Invalid parameters', details: e.errors || e.message });
+         return;
+    }
+
+    // Optional: Verify requestUserId matches token userId if strict check needed
+    // if (requestUserId && requestUserId !== userId) { ... }
 
     try {
         await checkRateLimit(userId, 'createPaymentIntent', 10, 3600);
 
         const txDoc = await db.collection('transactions').doc(transactionId).get();
-        if (!txDoc.exists) throw new Error("Transaction not found");
+        if (!txDoc.exists) {
+            res.status(404).json({ error: "Transaction not found" });
+            return;
+        }
         const tx = txDoc.data()!;
 
         const sellerDoc = await db.collection('users').doc(tx.seller_id).get();
-        if (!sellerDoc.exists) throw new Error("Seller not found");
+        if (!sellerDoc.exists) {
+            res.status(404).json({ error: "Seller not found" });
+            return;
+        }
         const seller = sellerDoc.data()!;
 
         if (!seller.stripe_connect_id || !seller.charges_enabled) {
-            throw new Error("Seller is not ready to receive payments.");
+            res.status(400).json({ error: "Seller is not ready to receive payments." });
+            return;
         }
 
         const itemDoc = await db.collection('items').doc(tx.item_id).get();
         const item = itemDoc.data()!;
         const amount = item.price;
-        const fee = Math.floor(amount * 0.1);
+        const fee = calculateFee(amount);
 
         // [Beta Strategy] Check if Seller is Mock
         const isMockSeller = seller.stripe_connect_id.startsWith('acct_mock_');
 
-        const paymentIntentData: any = {
+        const paymentIntentData: Stripe.PaymentIntentCreateParams = {
             amount: amount,
             currency: 'jpy',
             automatic_payment_methods: { enabled: true },
             capture_method: 'manual', // <--- AUTH ONLY
             metadata: {
                 transactionId: transactionId,
-                userId: userId,
+                userId: userId, // Use userId from authenticated token
             },
         };
 
@@ -315,19 +430,23 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
             paymentIntentData.application_fee_amount = fee;
         }
 
-        const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+        const idempotencyKey = `pi_create_${transactionId}`;
+        const paymentIntent = await stripe.paymentIntents.create(paymentIntentData, {
+            idempotencyKey
+        });
 
         await db.collection("transactions").doc(transactionId).update({
             payment_intent_id: paymentIntent.id,
             updatedAt: admin.firestore.Timestamp.now()
         });
 
-        return {
+        // Standard JSON Response
+        res.status(200).json({
             clientSecret: paymentIntent.client_secret,
-        };
-    } catch (error: any) {
-        console.error("Payment Intent Error:", error);
-        throw new functions.https.HttpsError('internal', error.message);
+        });
+
+    } catch (error) {
+        handleError(res, error, "createPaymentIntent");
     }
 });
 
@@ -339,9 +458,12 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
     }
     const callerId = context.auth.uid;
 
-    const transactionId = data.transactionId;
-    if (!transactionId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Transaction ID required.');
+    let transactionId: string;
+    try {
+        const params = CapturePaymentSchema.parse(data);
+        transactionId = params.transactionId;
+    } catch (e: any) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters', e.errors);
     }
 
     return db.runTransaction(async (t) => {
@@ -369,20 +491,31 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
 
         try {
             // CAPTURE
-            const capturedInfo = await stripe.paymentIntents.capture(paymentIntentId);
+            // Use tx.buyer_id + timestamp logic isn't perfect for idempotency if retrying same request.
+            // Best is to use transaction ID. capture is 1-to-1 with paymentintent usually.
+            const idempotencyKey = `pi_capture_${transactionId}`;
+            
+            const capturedInfo = await stripe.paymentIntents.capture(paymentIntentId, {}, {
+                idempotencyKey
+            });
 
             if (capturedInfo.status === 'succeeded') {
-                // Update Transaction
-                // Get seller info for unlock (legacy logic, maybe just unlock)
-                const sellerRef = db.collection("users").doc(tx.seller_id);
-                const sellerDoc = await t.get(sellerRef);
-                const seller = sellerDoc.data()!;
+                // Update Transaction（個人情報は private_data のみから取得）
+                const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
+                const sellerPrivateDoc = await t.get(sellerPrivateRef);
+                let studentId = "private";
+                let universityEmail = "private";
+                if (sellerPrivateDoc.exists) {
+                    const privateData = sellerPrivateDoc.data()!;
+                    studentId = privateData.student_id || privateData.email || studentId;
+                    universityEmail = privateData.university_email || privateData.email || universityEmail;
+                }
 
                 t.update(txRef, {
                     status: 'completed',
                     unlocked_assets: {
-                        student_id: seller.student_id || "private",
-                        university_email: seller.university_email || "private",
+                        student_id: studentId,
+                        university_email: universityEmail,
                         unlockedAt: admin.firestore.Timestamp.now()
                     },
                     updatedAt: admin.firestore.Timestamp.now()
@@ -393,54 +526,195 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
                 throw new Error("Capture failed status: " + capturedInfo.status);
             }
         } catch (e: any) {
-            console.error("Capture Error", e);
-            throw new functions.https.HttpsError('internal', "Payment capture failed: " + e.message);
+            // Use handleCallableError, but inside transaction we might need to re-throw specific way?
+            // Actually handleCallableError throws HttpsError, which aborts transaction properly.
+            return handleCallableError(e, "capturePayment");
         }
     });
 });
 
+// [Phase 14] Unlock Transaction (Fallback / Manual)
+// onRequest + Manual Auth (via API Route Proxy)
+export const unlockTransaction = functions.https.onRequest(async (req, res) => {
+    if (applyCors(req, res)) return;
 
-
-// [Pivot Implementation] Unlock via Client Call (Legacy/Immediate Feedback)
-export const unlockTransaction = functions.https.onCall(async (data, context) => {
-    const callerId = data.userId;
-    const transactionId = data.transactionId;
-    const paymentIntentId = data.paymentIntentId;
-
-    if (!transactionId || !callerId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Transaction ID and User ID are required.');
+    // 1. Method Check
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
     }
 
-    return db.runTransaction(async (t) => {
-        // Path A: Direct Stripe Payment
-        if (paymentIntentId) {
-            try {
-                // Verify with Stripe
-                const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-                // Allow 'succeeded' OR 'requires_capture' (for manual capture flow)
-                // Actually, if it is manual capture, it is 'requires_capture'.
-                // But unlockTransaction is usually called after success? 
-                // In Phase 13, unlock is done via 'capturePayment'.
-                // This 'unlockTransaction' might be legacy or for fallback. 
-                // Let's keep it robust.
+    // 2. Auth Check (Manual)
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).send('Unauthorized: Missing or invalid token');
+        return;
+    }
+    const idToken = authHeader.split('Bearer ')[1];
+    let callerId;
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken, true);
+        callerId = decodedToken.uid;
+    } catch (error: any) {
+        console.error("Unlock Auth Error:", error);
+        if (error.code === 'auth/id-token-revoked') {
+            res.status(401).send('Unauthorized: Token has been revoked');
+        } else {
+            res.status(401).send('Unauthorized: Invalid token');
+        }
+        return;
+    }
 
-                if ((paymentIntent.status === 'succeeded' || paymentIntent.status === 'requires_capture') && paymentIntent.metadata.transactionId === transactionId) {
-                    // CALL SHARED logic
-                    return processUnlock(transactionId, callerId, paymentIntentId, t);
-                } else {
-                    throw new functions.https.HttpsError('permission-denied', 'Payment not successful or mismatched.');
-                }
-            } catch (e: any) {
-                console.error("Stripe Verification Failed", e);
-                throw new functions.https.HttpsError('internal', 'Failed to verify payment with provider.');
+    // 3. Data Extraction (No 'data' wrapper)
+    let transactionId: string;
+    try {
+         const body = UnlockTransactionSchema.parse(req.body);
+         transactionId = body.transactionId;
+    } catch (e: any) {
+         res.status(400).json({ error: 'Invalid parameters', details: e.errors });
+         return;
+    }
+
+    try {
+        const txRef = db.collection('transactions').doc(transactionId);
+        const txDoc = await txRef.get();
+
+        if (!txDoc.exists) {
+            res.status(404).json({ error: 'Transaction not found' });
+            return;
+        }
+
+        const tx = txDoc.data()!;
+
+        // Security: Check if caller is involved in transaction?
+        // Security: Check if caller is involved in transaction?
+        if (tx.buyer_id !== callerId && tx.seller_id !== callerId) {
+             console.warn(`Unlock attempt by unrelated user: ${callerId} for tx: ${transactionId}`);
+             res.status(403).json({ error: 'Permission denied: You are not a participant in this transaction.' });
+             return;
+        }
+
+        // Update status to 'completed'
+        await txRef.update({
+            status: 'completed',
+            unlockedAt: admin.firestore.Timestamp.now()
+        });
+
+        res.status(200).json({ success: true, message: 'Transaction unlocked' });
+
+    } catch (error) {
+        handleError(res, error, "unlockTransaction");
+    }
+});
+
+
+// [New] Cancel Transaction & Refund/Release
+export const cancelTransaction = functions.https.onCall(async (data, context) => {
+    // 1. Auth Check
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+    }
+    const callerId = context.auth.uid;
+    let transactionId: string;
+    let reason: string | undefined;
+    try {
+        const params = CancelTransactionSchema.parse(data);
+        transactionId = params.transactionId;
+        reason = params.reason;
+    } catch (e: any) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters', e.errors);
+    }
+
+    try {
+        await db.runTransaction(async (t) => {
+            const txRef = db.collection("transactions").doc(transactionId);
+            const txDoc = await t.get(txRef);
+            if (!txDoc.exists) throw new functions.https.HttpsError('not-found', "Transaction not found");
+
+            const tx = txDoc.data()!;
+            
+            // 2. Permission Check
+            // Buyer can cancel if 'request_sent' or 'approved' (before payment)
+            // Seller can cancel anytime (but refund if paid)
+            // Admins can cancel (context.auth.token.admin)
+            
+            const isBuyer = tx.buyer_id === callerId;
+            const isSeller = tx.seller_id === callerId;
+            
+            if (!isBuyer && !isSeller) {
+                throw new functions.https.HttpsError('permission-denied', "Not a participant.");
             }
-        }
-        // Path B: Internal Coin Balance (Fallback)
-        else {
-            // ... legacy coin logic omitted/simplified ...
-            throw new functions.https.HttpsError('failed-precondition', 'Stripe Payment Required in this version.');
-        }
-    });
+
+            // State Check
+            if (tx.status === 'cancelled') {
+                throw new functions.https.HttpsError('failed-precondition', "Already cancelled.");
+            }
+
+            // Buyer Restriction: Cannot cancel if 'payment_pending' or 'completed' (Must ask Seller)
+            // "payment_pending" means Auth Hold is on. Buyer "could" cancel, but better to prevent easy cancellation after commitment.
+            // Let's allow Buyer to cancel 'payment_pending' ONLY IF we release hold.
+            // Actually, for preventing trolls, maybe Buyer can cancel 'request_sent' and 'approved'.
+            // Once 'payment_pending' (Auth), only Seller can cancel/refund? Or both?
+            // Let's allow Buyer to cancel 'payment_pending' too (Release Auth) for MVP usability.
+            // But if 'completed' (Captured), ONLY Seller can Refund.
+            if (isBuyer && tx.status === 'completed') {
+                throw new functions.https.HttpsError('permission-denied', "Buyer cannot cancel completed transaction. Contact Seller for refund.");
+            }
+
+            // 3. Stripe Processing
+            const piId = tx.payment_intent_id;
+            if (piId) {
+                try {
+                    const pi = await stripe.paymentIntents.retrieve(piId);
+                    
+                    if (pi.status === 'requires_capture') {
+                        // Auth Hold -> Cancel Authorization
+                        const idempotencyKey = `pi_cancel_${transactionId}`;
+                        console.log(`Canceling Auth for ${piId}`);
+                        await stripe.paymentIntents.cancel(piId, { idempotencyKey });
+                    } else if (pi.status === 'succeeded') {
+                        // Captured -> Refund
+                        const idempotencyKey = `pi_refund_${transactionId}`;
+                        console.log(`Refunding ${piId}`);
+                        await stripe.refunds.create({
+                            payment_intent: piId,
+                            reason: 'requested_by_customer' // or 'fraudulent', 'duplicate'
+                        }, { idempotencyKey });
+                    }
+                } catch (stripeError: any) {
+                    console.error("Stripe Cancel Error:", stripeError);
+                    // Check for "already canceled" or similar safe errors
+                    if (!stripeError.message?.includes('canceled') && !stripeError.message?.includes('redundant')) {
+                          handleCallableError(stripeError, "cancelTransaction-Stripe");
+                    }
+                }
+            }
+
+            // 4. Update Firestore
+            // Transaction -> cancelled
+            t.update(txRef, {
+                status: 'cancelled',
+                cancel_reason: reason || "User requested",
+                cancelledBy: callerId,
+                cancelledAt: admin.firestore.Timestamp.now()
+            });
+
+            // Item -> listing (Release item)
+            // Only if item exists and matches this transaction
+            const itemRef = db.collection("items").doc(tx.item_id);
+            const itemDoc = await t.get(itemRef);
+            if (itemDoc.exists) {
+                t.update(itemRef, {
+                    status: 'listing' // Back to market
+                });
+            }
+        });
+
+        return { success: true };
+
+    } catch (e: any) { 
+        return handleCallableError(e, "cancelTransaction");
+    }
 });
 
 // [New] Rate User
@@ -450,13 +724,16 @@ export const rateUser = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
     }
     const uid = context.auth.uid;
-    const { transactionId, score, role } = data; // role: 'buyer' | 'seller' (optional but recommended for disambiguation)
-
-    // [Anti-Abuse] Rate Limit: 30 ratings per hour (Should be enough for normal use)
-    await checkRateLimit(uid, 'rateUser', 30, 3600);
-
-    if (!transactionId || !score || score < 1 || score > 5) {
-        throw new functions.https.HttpsError('invalid-argument', 'Invalid score or ID');
+    let transactionId: string;
+    let score: number;
+    let role: 'buyer' | 'seller' | undefined;
+    try {
+         const params = RateUserSchema.parse(data);
+         transactionId = params.transactionId;
+         score = params.score;
+         role = params.role;
+    } catch (e: any) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters', e.errors);
     }
 
     try {
@@ -464,7 +741,7 @@ export const rateUser = functions.https.onCall(async (data, context) => {
         const txSnap = await txRef.get();
         if (!txSnap.exists) throw new functions.https.HttpsError('not-found', 'Transaction not found');
 
-        const tx = txSnap.data() as any;
+        const tx = txSnap.data()!;
 
         // 2. Permission Check: user must be buyer or seller
         let isBuyer = tx.buyer_id === uid;
@@ -535,8 +812,7 @@ export const rateUser = functions.https.onCall(async (data, context) => {
         return { success: true };
 
     } catch (error: any) {
-        console.error("RateUser Error:", error);
-        throw new functions.https.HttpsError('internal', error.message || 'Rating failed');
+        return handleCallableError(error, "rateUser");
     }
 });
 
@@ -545,7 +821,7 @@ export const rateUser = functions.https.onCall(async (data, context) => {
 
 
 // [New] Stripe Webhook
-export const stripeWebhook = functions.https.onRequest(async (req, res) => {
+export const stripeWebhook = functions.https.onRequest(async (req: functions.https.Request, res: functions.Response) => {
     const sig = req.headers['stripe-signature'];
     const endpointSecret = functions.config().stripe ? functions.config().stripe.webhook_secret : "";
 
@@ -564,12 +840,24 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
     if (event.type === 'account.updated') {
         const account = event.data.object as Stripe.Account;
         if (account.charges_enabled) {
-            // Find user by stripe_connect_id and update charges_enabled
-            const usersSnap = await db.collection('users').where('stripe_connect_id', '==', account.id).get();
-            if (!usersSnap.empty) {
-                const userDoc = usersSnap.docs[0];
-                await userDoc.ref.update({ charges_enabled: true });
-                console.log(`User ${userDoc.id} charges enabled via Connect.`);
+            try {
+                // 1. Lookup User ID
+                const mapDoc = await db.collection('stripe_accounts').doc(account.id).get();
+                if (mapDoc.exists) {
+                    const userId = mapDoc.data()!.userId;
+                    
+                    // 2. Update Private Profile
+                    const privateProfileRef = db.collection('users').doc(userId).collection('private_data').doc('profile');
+                    await privateProfileRef.update({ 
+                        charges_enabled: true,
+                        updatedAt: admin.firestore.Timestamp.now()
+                    });
+                    console.log(`User ${userId} charges enabled via Connect (Webhook).`);
+                } else {
+                    console.warn(`Stripe ID ${account.id} not found in lookup map.`);
+                }
+            } catch (e) {
+                console.error("Webhook Account Update Error", e);
             }
         }
     }
@@ -593,7 +881,9 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
                 return;
             }
         }
+
     }
+});
 
 // [Security] Blocking Function (Requires Identity Platform)
 // To enable: Upgrade to Blaze Plan, Enable Identity Platform, and deploy this function.
@@ -705,6 +995,39 @@ async function checkRateLimit(userId: string, action: string, limit: number, win
         timestamp: now
     });
 }
+
+// [Debug] Fix Seller Status Manually
+exports.fixSellerStatus = functions.https.onRequest(async (req, res) => {
+    const email = req.query.email as string;
+    if (!email) {
+        res.status(400).send("Missing email query param");
+        return;
+    }
+
+    try {
+        const userRecord = await admin.auth().getUserByEmail(email);
+        const uid = userRecord.uid;
+        const userRef = db.collection('users').doc(uid);
+        const userDoc = await userRef.get();
+
+        if (!userDoc.exists) {
+            res.status(404).send(`User doc not found for ${email} (${uid})`);
+            return;
+        }
+
+        const data = userDoc.data()!;
+        await userRef.update({
+            stripe_connect_id: data.stripe_connect_id || `acct_mock_${uid}`,
+            charges_enabled: true,
+            updatedAt: admin.firestore.Timestamp.now()
+        });
+
+        res.status(200).send(`Fixed seller status for ${email} (${uid}). Charges enabled.`);
+    } catch (error: any) {
+        console.error("Fix Seller Error", error);
+        res.status(500).send(error.message);
+    }
+});
 
 // [Phase 2] Notifications
 export * from "./notifications";

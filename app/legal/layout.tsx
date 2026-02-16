@@ -14,7 +14,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
                     </CardContent>
                 </Card>
                 <div className="text-center text-xs text-slate-400">
-                    &copy; 2024 Musashino Link Project. All interactions are subject to University Guidelines.
+                    &copy; 2024 Musa Project. All interactions are subject to University Guidelines.
                 </div>
             </div>
         </div>

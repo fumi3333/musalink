@@ -1,10 +1,11 @@
 import React from 'react';
 import { Item } from '@/types';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge'; // Badge component needed
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Star, BookOpen, Clock, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
+import { getItemCategoryLabel } from '@/lib/constants';
 
 interface ItemCardProps {
     item: Item;
@@ -51,14 +52,17 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
 
                 <BookOpen className="h-12 w-12 text-slate-300 group-hover:scale-110 transition-transform duration-500" />
 
-                {/* Tags (Dept) */}
-                {item.metadata?.seller_department && (
-                    <div className="absolute top-2 left-2 flex flex-col gap-1">
-                        <Badge variant="secondary" className="bg-white/90 backdrop-blur-sm text-slate-700 shadow-sm text-[10px] border-none font-bold">
+                {/* Tags: カテゴリー + 学部（任意） */}
+                <div className="absolute top-2 left-2 flex flex-col gap-1">
+                    <Badge variant="secondary" className="bg-white/90 backdrop-blur-sm text-slate-700 shadow-sm text-[10px] border-none font-bold">
+                        {getItemCategoryLabel(item.category)}
+                    </Badge>
+                    {item.metadata?.seller_department && (
+                        <Badge variant="secondary" className="bg-white/80 backdrop-blur-sm text-slate-600 shadow-sm text-[10px] border-none">
                             {item.metadata.seller_department}
                         </Badge>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 {/* Status Badge */}
                 {item.status !== 'listing' && (
@@ -120,7 +124,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
             </CardContent>
 
             <CardFooter className="p-4 pt-0">
-                <Link href={`/transactions/new?itemId=${item.id}`} className="w-full">
+                <Link href={`/items/${item.id}`} className="w-full">
                     <Button variant="outline" size="sm" className="w-full border-slate-200 text-slate-600 group-hover:bg-violet-50 group-hover:text-violet-700 group-hover:border-violet-200 transition-all font-bold">
                         詳細を見る
                     </Button>

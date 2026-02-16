@@ -28,7 +28,7 @@ export const AuthButtons = () => {
 
     const isVerified = user?.email?.endsWith('@stu.musashino-u.ac.jp');
 
-    if (loading) return <div className="text-xs text-slate-400 px-2">Loading...</div>;
+    if (loading) return <div className="text-xs text-slate-400 px-2">読み込み中...</div>;
 
     if (!user) {
         // ... (Guest Buttons kept same)
@@ -42,10 +42,10 @@ export const AuthButtons = () => {
                 {/* TEST MODE ACCOUNTS */}
                 <div className="flex flex-col gap-1">
                     <Button onClick={() => debugLogin('seller')} variant="outline" size="sm" className="text-[10px] h-6 px-2 text-slate-500 border-dashed border-slate-300 hover:bg-violet-50 hover:text-violet-600 hover:border-violet-300 transition-all">
-                        🟢 売り手で試す (Guest Seller)
+                        🟢 売り手で試す
                     </Button>
                     <Button onClick={() => debugLogin('buyer')} variant="outline" size="sm" className="text-[10px] h-6 px-2 text-slate-500 border-dashed border-slate-300 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all">
-                        🔵 買い手で試す (Guest Buyer)
+                        🔵 買い手で試す
                     </Button>
                 </div>
 
@@ -63,7 +63,7 @@ export const AuthButtons = () => {
                                     <span className="font-bold text-slate-700">解決手順:</span>
                                     <ol className="list-decimal list-inside mt-2 text-xs space-y-1">
                                         <li>Firebase Consoleを開く</li>
-                                        <li>Authentication &gt; Sign-in methodを選択</li>
+                                        <li>認証 &gt; サインイン方法を選択</li>
                                         <li>Googleプロバイダを「有効」にする</li>
                                     </ol>
                                 </div>
@@ -78,7 +78,51 @@ export const AuthButtons = () => {
 
 
     return (
-        <div className="flex items-center gap-1 relative">
+        <div className="flex items-center gap-4">
+            {/* [Debug] Agent Testing Buttons - Visible only in Development */}
+            {process.env.NODE_ENV === 'development' && (
+                <div className="flex gap-1 flex-wrap">
+                    <Button variant="ghost" size="sm" onClick={() => debugLogin('seller')} className="text-xs text-amber-600 bg-amber-50">
+                        テスト売り手
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => debugLogin('buyer')} className="text-xs text-blue-600 bg-blue-50">
+                        テスト買い手
+                    </Button>
+                    {/* Email Test Button */}
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs text-green-600 bg-green-50"
+                        onClick={async () => {
+                            if (!user) {
+                                alert("まずは自分のGoogleアカウントでログインしてください！");
+                                return;
+                            }
+                            try {
+                                const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
+                                const { db } = await import('@/lib/firebase');
+                                
+                                // Create dummy transaction (Self-Trade) => Triggers onTransactionCreated
+                                await addDoc(collection(db, "transactions"), {
+                                    buyer_id: user.uid,
+                                    seller_id: user.uid, // Send to ME
+                                    item_id: "test_item_id", // Dummy
+                                    status: "request_sent",
+                                    createdAt: serverTimestamp(),
+                                    is_test_email: true
+                                });
+                                const { toast } = await import('sonner');
+                                toast.success(`送信成功！${user.email} 宛のメールを確認してください`);
+                            } catch(e: any) {
+                                alert("送信失敗: " + e.message);
+                            }
+                        }}
+                    >
+                        ✉️ 通知テスト
+                    </Button>
+                </div>
+            )}
+
             {/* Notification Bell */}
             <Link href="/notifications">
                 <Button variant="ghost" size="icon" className="text-slate-600 hover:text-violet-600 relative">

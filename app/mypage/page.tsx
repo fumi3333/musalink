@@ -58,14 +58,14 @@ const ListingItemCard = ({ item }: { item: Item }) => {
 
 // --- Sub Component: Transaction Item ---
 const TransactionItemCard = ({ transaction, currentUserId }: { transaction: Transaction, currentUserId: string }) => {
-    const [itemTitle, setItemTitle] = useState("Loading...");
+    const [itemTitle, setItemTitle] = useState("読み込み中...");
     const isBuyer = transaction.buyer_id === currentUserId;
 
     useEffect(() => {
         // Fetch snapshot title if possible, or live item
         getItem(transaction.item_id).then(i => {
             if (i) setItemTitle(i.title);
-            else setItemTitle("Unknown Item");
+            else setItemTitle("不明な商品");
         });
     }, [transaction.item_id]);
 
@@ -116,6 +116,13 @@ export default function MyPage() {
     const [myTransactions, setMyTransactions] = useState<Transaction[]>([]);
     const [loadingData, setLoadingData] = useState(true);
 
+    // --- Edit Profile State (Moved up to avoid Hook Error) ---
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editForm, setEditForm] = useState({
+        display_name: "",
+        interests: [] as string[]
+    });
+
     useEffect(() => {
         if (!authLoading && !userData) {
             router.push('/'); // Redirect if not logged in
@@ -136,7 +143,7 @@ export default function MyPage() {
         }
     }, [userData, authLoading, router]);
 
-    if (authLoading || (!userData && loadingData)) return <div className="min-h-screen pt-20 text-center">Loading...</div>;
+    if (authLoading || (!userData && loadingData)) return <div className="min-h-screen pt-20 text-center">読み込み中...</div>;
 
     const activeListings = myItems.filter(i => i.status === 'listing');
     const soldListings = myItems.filter(i => i.status !== 'listing');
@@ -146,11 +153,6 @@ export default function MyPage() {
     const pastTx = myTransactions.filter(t => t.status === 'completed' || t.status === 'cancelled');
 
     // --- Edit Profile Logic ---
-    const [isEditOpen, setIsEditOpen] = useState(false);
-    const [editForm, setEditForm] = useState({
-        display_name: "",
-        interests: [] as string[]
-    });
 
     const openEdit = () => {
         if (!userData) return;
@@ -200,7 +202,7 @@ export default function MyPage() {
                 <div className="max-w-md mx-auto flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center text-2xl overflow-hidden border-2 border-slate-100">
                         {userData?.photoURL ? (
-                            <img src={userData.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                            <img src={userData.photoURL} alt="プロフィール" className="w-full h-full object-cover" />
                         ) : (
                             <span>{userData?.display_name?.[0] || "U"}</span>
                         )}

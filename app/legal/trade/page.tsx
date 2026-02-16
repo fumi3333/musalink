@@ -8,15 +8,15 @@ export default function TradePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-200 pt-4">
                 <div className="font-bold text-slate-700">サービス名</div>
-                <div className="md:col-span-2">Musashino Link</div>
+                <div className="md:col-span-2">Musa</div>
 
                 <div className="font-bold text-slate-700">運営者</div>
-                <div className="md:col-span-2">Musashino Link 運営 (武蔵野大学 経済学部 学生個人開発)</div>
+                <div className="md:col-span-2">Musa 運営 (武蔵野大学 経済学部 学生個人開発)</div>
 
 
 
                 <div className="font-bold text-slate-700">連絡先</div>
-                <div className="md:col-span-2">support@musashino-link-demo.com (Demo)</div>
+                <div className="md:col-span-2">support@musa-demo.com (Demo)</div>
 
                 <div className="font-bold text-slate-700">利用料金</div>
                 <div className="md:col-span-2">

@@ -15,9 +15,20 @@ import { db, storage } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Camera, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { ITEM_CATEGORIES } from '@/lib/constants';
+import type { ItemCategory } from '@/types';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export default function CreateListingPage() {
     const { user, userData: authUserData, login } = useAuth(); // Get userData from Context
+    const [category, setCategory] = useState<ItemCategory>('book');
     const [condition, setCondition] = useState<number>(3);
     const [loading, setLoading] = useState(false);
     const [searchingIsbn, setSearchingIsbn] = useState(false);
@@ -36,6 +47,8 @@ export default function CreateListingPage() {
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     const [blockingReason, setBlockingReason] = useState<'unauthenticated' | 'unverified' | 'payout_missing' | null>(null);
+
+
 
     useEffect(() => {
         // Sync with useAuth user
@@ -90,7 +103,7 @@ export default function CreateListingPage() {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 5 * 1024 * 1024) {
-                alert("画像サイズは5MB以下にしてください");
+                toast.error("画像サイズは5MB以下にしてください");
                 return;
             }
             setImageFile(file);
@@ -118,11 +131,11 @@ export default function CreateListingPage() {
                 setAuthor(book.author);
                 if (!description) setDescription(book.description);
             } else {
-                alert("書籍が見つかりませんでした。手動で入力してください。");
+                toast.info("書籍が見つかりませんでした。手動で入力してください。");
             }
         } catch (e) {
             console.error(e);
-            alert("検索エラーが発生しました");
+            toast.error("検索エラーが発生しました");
         } finally {
             setSearchingIsbn(false);
         }
@@ -145,20 +158,21 @@ export default function CreateListingPage() {
             }
 
             await createItem({
+                category,
                 title,
-                author,
-                isbn,
+                author: category === 'book' ? author : undefined,
+                isbn: category === 'book' ? isbn : undefined,
                 price,
                 description,
-                lecture_name: lectureName,
-                teacher_name: teacherName,
+                lecture_name: category === 'book' ? lectureName : undefined,
+                teacher_name: category === 'book' ? teacherName : undefined,
                 condition,
                 status: 'listing',
                 seller_id: currentUser.id,
                 image_urls: downloadURL ? [downloadURL] : [],
                 metadata: {
-                    seller_grade: currentUser.student_id ? 'B1' : 'Unknown', // Inferred or fetched
-                    seller_department: 'Department', // Simplified for now since we removed input
+                    seller_grade: currentUser.student_id ? 'B1' : '不明',
+                    seller_department: 'Department',
                     seller_verified: true
                 },
             });
@@ -260,7 +274,7 @@ export default function CreateListingPage() {
         <div className="min-h-screen bg-slate-50 py-6 px-4 pb-20 md:py-10">
             <div className="max-w-2xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">教科書を出品する</h1>
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">商品を出品する</h1>
                     <Link href="/items">
                         <Button variant="ghost" size="sm">キャンセル</Button>
                     </Link>
@@ -269,83 +283,88 @@ export default function CreateListingPage() {
                 <form onSubmit={handleSubmit}>
                     <Card className="shadow-sm border-slate-200">
                         <CardHeader className="bg-white rounded-t-lg pb-4">
-                            <CardTitle className="text-lg">書籍情報の入力</CardTitle>
+                            <CardTitle className="text-lg">カテゴリーと商品情報</CardTitle>
                             <CardDescription className="text-xs md:text-sm">
-                                ISBNを入力して「検索」を押すと、タイトルや著者が自動入力されます。
+                                {category === 'book' ? '教科書の場合はISBNで自動入力できます。' : '商品名と説明を入力してください。'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6 pt-6">
 
-
-                            {/* User Profile inferred from Auth - Section Removed */}
-
-                            {/* [Optional] Image Upload Section - Hidden per user request 
+                            {/* カテゴリー選択 */}
                             <div className="space-y-2">
-                                <Label className="font-bold text-slate-700">商品写真 (任意・1枚のみ)</Label>
-                                <div className="flex items-center gap-4">
-                                ...
-                                </div>
-                            </div>
-                            */}
-
-
-                            <div className="space-y-2">
-                                <Label htmlFor="isbn" className="font-bold text-slate-700">ISBN (任意)</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        id="isbn"
-                                        placeholder="例: 9784..."
-                                        value={isbn}
-                                        onChange={(e) => setIsbn(e.target.value)}
-                                        className="font-mono"
-                                    />
-                                    <Button type="button" onClick={handleIsbnSearch} disabled={searchingIsbn || !isbn} variant="secondary" className="whitespace-nowrap">
-                                        {searchingIsbn ? '...' : '自動入力'}
-                                    </Button>
-                                </div>
+                                <Label className="font-bold text-slate-700">カテゴリー *</Label>
+                                <Select value={category} onValueChange={(v) => setCategory(v as ItemCategory)}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="カテゴリーを選択" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {ITEM_CATEGORIES.map((c) => (
+                                            <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
 
+                            {/* 教科書のときだけ ISBN 検索・書籍用入力 */}
+                            {category === 'book' && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="isbn" className="font-bold text-slate-700">ISBN (任意)</Label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                id="isbn"
+                                                placeholder="例: 9784..."
+                                                value={isbn}
+                                                onChange={(e) => setIsbn(e.target.value)}
+                                                className="font-mono"
+                                            />
+                                            <Button type="button" onClick={handleIsbnSearch} disabled={searchingIsbn || !isbn} variant="secondary" className="whitespace-nowrap">
+                                                {searchingIsbn ? '...' : '自動入力'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="author" className="text-slate-600">著者名</Label>
+                                        <Input
+                                            id="author"
+                                            value={author}
+                                            onChange={(e) => setAuthor(e.target.value)}
+                                            placeholder="例: 武蔵野 太郎"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="lecture" className="text-slate-600">授業名 (任意)</Label>
+                                            <Input
+                                                id="lecture"
+                                                value={lectureName}
+                                                onChange={(e) => setLectureName(e.target.value)}
+                                                placeholder="例: 基礎演習A"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="teacher" className="text-slate-600">先生の名前 (任意)</Label>
+                                            <Input
+                                                id="teacher"
+                                                value={teacherName}
+                                                onChange={(e) => setTeacherName(e.target.value)}
+                                                placeholder="例: 佐藤先生"
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
                             <div className="space-y-2">
-                                <Label htmlFor="title" className="font-bold text-slate-700">教科書タイトル *</Label>
+                                <Label htmlFor="title" className="font-bold text-slate-700">{category === 'book' ? '教科書タイトル' : '商品名'} *</Label>
                                 <Input
                                     id="title"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
-                                    placeholder="例: 情報工学の基礎"
+                                    placeholder={category === 'book' ? '例: 情報工学の基礎' : '例: デスクライト、マジックグッズ など'}
                                     required
                                     className="font-bold text-lg"
                                 />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="author" className="text-slate-600">著者名</Label>
-                                <Input
-                                    id="author"
-                                    value={author}
-                                    onChange={(e) => setAuthor(e.target.value)}
-                                    placeholder="例: 武蔵野 太郎"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="lecture" className="text-slate-600">授業名 (任意)</Label>
-                                    <Input
-                                        id="lecture"
-                                        value={lectureName}
-                                        onChange={(e) => setLectureName(e.target.value)}
-                                        placeholder="例: 基礎演習A"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="teacher" className="text-slate-600">先生の名前 (任意)</Label>
-                                    <Input
-                                        id="teacher"
-                                        value={teacherName}
-                                        onChange={(e) => setTeacherName(e.target.value)}
-                                        placeholder="例: 佐藤先生"
-                                    />
-                                </div>
                             </div>
 
                             <div className="space-y-3">

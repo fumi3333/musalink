@@ -15,11 +15,13 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { ITEM_CATEGORIES } from '@/lib/constants';
 
 export default function ItemListView() {
     const [items, setItems] = useState<Item[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const [category, setCategory] = useState("all");
     const [department, setDepartment] = useState("all");
     const [grade, setGrade] = useState("all");
     const [keyword, setKeyword] = useState("");
@@ -27,7 +29,7 @@ export default function ItemListView() {
     const fetchItems = async () => {
         setLoading(true);
         try {
-            const data = await getItems({ department, grade, keyword });
+            const data = await getItems({ category, department, grade, keyword });
             setItems(data);
         } catch (e) {
             console.error(e);
@@ -38,18 +40,8 @@ export default function ItemListView() {
     };
 
     useEffect(() => {
-        // Debounce or just dependency? 
-        // For MVP, dependency is fine, but text input might flash.
-        // Let's use Enter key or Search button for keyword, but Filters auto-update.
-        // Actually, let's keep it simple: Filters trigger fetch, Keyword triggers on Search Button click.
-        // But here we put everything in useEffect? 
-        // No, let's remove keyword from useEffect dependency to avoid typing-lag, 
-        // and make Search Button trigger fetchItems.
-        // However, fetchItems uses the current state.
-        // If we want auto-search, add keyword to deps with debounce.
-        // For now: Only Filters trigger auto-fetch.
         fetchItems();
-    }, [department, grade]);
+    }, [category, department, grade]);
 
     const handleSearch = () => {
         fetchItems();
@@ -64,11 +56,11 @@ export default function ItemListView() {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
                             <h1 className="text-2xl font-bold text-slate-900">出品一覧</h1>
-                            <p className="text-slate-500 text-sm">現在販売中の教科書: {loading ? '...' : items.length}件</p>
+                            <p className="text-slate-500 text-sm">現在販売中の商品: {loading ? '...' : items.length}件</p>
                         </div>
                         <Link href="/items/create">
                             <Button className="font-bold shadow-md bg-slate-900 text-white hover:bg-slate-800">
-                                <Plus className="mr-2 h-4 w-4" /> 教科書を出品
+                                <Plus className="mr-2 h-4 w-4" /> 商品を出品
                             </Button>
                         </Link>
                     </div>
@@ -79,7 +71,7 @@ export default function ItemListView() {
                             <div className="relative flex-1">
                                 <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                                 <Input
-                                    placeholder="教科書名、著者名で検索..."
+                                    placeholder="商品名、著者名で検索..."
                                     className="pl-9 bg-slate-50 border-slate-200"
                                     value={keyword}
                                     onChange={(e) => setKeyword(e.target.value)}
@@ -90,7 +82,18 @@ export default function ItemListView() {
                                 検索
                             </Button>
                         </div>
-                        <div className="flex gap-2 shrink-0">
+                        <div className="flex flex-wrap gap-2 shrink-0">
+                            <Select value={category} onValueChange={setCategory}>
+                                <SelectTrigger className="w-[140px]">
+                                    <SelectValue placeholder="カテゴリー" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">全カテゴリー</SelectItem>
+                                    {ITEM_CATEGORIES.map((c) => (
+                                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                             <Select value={department} onValueChange={setDepartment}>
                                 <SelectTrigger className="w-[140px]">
                                     <SelectValue placeholder="学部" />
@@ -129,7 +132,7 @@ export default function ItemListView() {
                     <div className="text-center py-20 text-slate-400">読み込み中...</div>
                 ) : items.length === 0 ? (
                     <div className="text-center py-20 bg-white rounded-lg border-2 border-dashed border-slate-200">
-                        <p className="text-slate-500 mb-4">まだ出品された教科書はありません</p>
+                        <p className="text-slate-500 mb-4">まだ出品された商品はありません</p>
                         <Link href="/items/create">
                             <Button>最初の出品者になる</Button>
                         </Link>

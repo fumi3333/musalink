@@ -38,18 +38,28 @@ export const ChatRoom = ({ transactionId, buyerId, sellerId }: ChatRoomProps) =>
             orderBy("createdAt", "asc")
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Message));
-            setMessages(msgs);
-            // Scroll to bottom on new message
-            setTimeout(() => {
-                if (scrollRef.current) {
-                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        const unsubscribe = onSnapshot(q, {
+            next: (snapshot) => {
+                const msgs = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as Message));
+                setMessages(msgs);
+                // Scroll to bottom on new message
+                setTimeout(() => {
+                    if (scrollRef.current) {
+                        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                    }
+                }, 100);
+            },
+            error: (error) => {
+                // Silently handle permission errors during role switching
+                if (error.code === 'permission-denied') {
+                    console.debug("Chat listener permission denied (likely auth switch). Ignoring.");
+                    return;
                 }
-            }, 100);
+                console.error("Chat listener error:", error);
+            }
         });
 
         return () => unsubscribe();

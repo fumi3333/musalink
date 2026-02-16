@@ -131,7 +131,7 @@ export default function VerificationPage() {
                                 <div className="flex justify-between items-center bg-white p-2 rounded border border-slate-200">
                                     <span className="text-xs font-bold text-violet-600">STUDENT ID</span>
                                     <span className="font-mono text-lg font-bold text-slate-800">
-                                        {studentId || "Unknown"}
+                                        {studentId || "不明"}
                                     </span>
                                 </div>
                             </div>

@@ -24,8 +24,13 @@ export interface User {
     };
 }
 
+/** 出品カテゴリー（教科書以外も出品可能） */
+export type ItemCategory = 'book' | 'electronics' | 'furniture' | 'variety' | 'others';
+
 export interface Item {
     id: string;
+    /** カテゴリー（未設定の既存データは book として扱う） */
+    category?: ItemCategory;
     title: string;
     market_price?: number; // [New] 市場価格 (Amazon中古など)
     bookId?: string; // [New] 書籍ID (独自の管理ID)
@@ -76,6 +81,11 @@ export interface Transaction {
     is_demo?: boolean; // [Security] Allows checking if this is a test transaction for bypass rules
     updatedAt?: any; // Firestore Timestamp
     createdAt?: any; // Firestore Timestamp
+    
+    // Cancellation Info
+    cancel_reason?: string;
+    cancelledBy?: string;
+    cancelledAt?: any;
 }
 
 export interface Notification {

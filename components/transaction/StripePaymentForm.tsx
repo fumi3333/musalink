@@ -45,10 +45,10 @@ export default function StripePaymentForm({ transactionId, userId, onSuccess }: 
         });
 
         if (error) {
-            setMessage(error.message ?? "An unexpected error occurred.");
+            setMessage(error.message ?? "予期しないエラーが発生しました。");
             setIsLoading(false);
         } else if (paymentIntent && (paymentIntent.status === "succeeded" || paymentIntent.status === "requires_capture")) {
-            setMessage("Payment authorized! Funds reserved.");
+            setMessage("決済が承認されました。利用枠を確保しました。");
 
             // [Auth & Capture Flow]
             // We do NOT unlock yet. We just update status to 'payment_pending'.
@@ -70,7 +70,7 @@ export default function StripePaymentForm({ transactionId, userId, onSuccess }: 
                 setIsLoading(false);
             }
         } else {
-            setMessage("Payment status: " + paymentIntent?.status);
+            setMessage("決済ステータス: " + paymentIntent?.status);
             setIsLoading(false);
         }
     };

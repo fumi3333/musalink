@@ -1,0 +1,12 @@
+# Ignore node_modules
+node_modules/
+firebase-debug.log
+firebase-debug.*.log
+*.log
+
+# Secrets (MUST IGNORE)
+.env
+.env.*
+!.env.example
+
+!lib/

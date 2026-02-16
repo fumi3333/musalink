@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 
 function NewTransactionContent() {
     const router = useRouter();
@@ -40,7 +41,7 @@ function NewTransactionContent() {
     const handleCreateTransaction = async () => {
         if (!item) return;
         if (!userData?.id) {
-            alert("ログインしてください");
+            toast.error("ログインしてください");
             return;
         }
         setCreating(true);
@@ -51,14 +52,14 @@ function NewTransactionContent() {
             router.push(`/transactions/detail?id=${transactionId}`);
         } catch (e) {
             console.error(e);
-            alert("取引の開始に失敗しました: " + ((e as any).message || "Unknown error"));
+            toast.error("取引の開始に失敗しました: " + ((e as any).message || "不明なエラー"));
         } finally {
             setCreating(false);
         }
     };
 
     if (!itemId) return <div className="p-10 text-center">Invalid Item ID</div>;
-    if (loading) return <div className="p-10 text-center">Loading Item...</div>;
+    if (loading) return <div className="p-10 text-center">商品を読み込み中...</div>;
     if (!item) return <div className="p-10 text-center">Item not found</div>;
 
     return (
@@ -164,7 +165,7 @@ function NewTransactionContent() {
 
 export default function NewTransactionPage() {
     return (
-        <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
+        <Suspense fallback={<div className="p-10 text-center">読み込み中...</div>}>
             <NewTransactionContent />
         </Suspense>
     );

@@ -6,15 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Search, Bell, User, Menu, X, PlusCircle } from 'lucide-react';
 import { AuthButtons } from './AuthButtons';
 
+import { IS_BETA } from '@/lib/constants';
+
 export const Header = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     return (
         <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-white/20">
             {/* BETA BANNER */}
-            <div className="bg-amber-400 text-amber-900 text-center text-xs font-bold py-1 px-4 shadow-sm border-b border-amber-500/20">
-                🚧 BETA TEST MODE - 実際の決済は発生しません (No Real Charge) 🚧
-            </div>
+            {IS_BETA && (
+                <div className="bg-amber-400 text-amber-900 text-center text-xs font-bold py-1 px-4 shadow-sm border-b border-amber-500/20">
+                    🚧 ベータテストモード - 実際の決済は発生しません 🚧
+                </div>
+            )}
             <div className="container mx-auto px-4 h-16 flex items-center justify-between">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-2">
@@ -22,7 +26,7 @@ export const Header = () => {
                         M
                     </div>
                     <span className="font-bold text-xl tracking-tight text-slate-800">
-                        Musashino Link
+                        Musa
                     </span>
                 </Link>
 

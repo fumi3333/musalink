@@ -1,6 +1,6 @@
 # 💻 開発者向けドキュメント (Development Guide)
 
-このドキュメントは、Musashino Link の開発環境構築手順をまとめたものです。
+このドキュメントは、Musa の開発環境構築手順をまとめたものです。
 プロジェクトの一般向け概要は [README.md](./README.md) を参照してください。
 
 ## 1. 環境構築 (Setup)
@@ -35,8 +35,8 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=xxx
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=xxx
 NEXT_PUBLIC_FIREBASE_APP_ID=xxx
 
-# Stripe Public Key (Test Mode)
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_xxx
+# Stripe Public Key (Test Mode) — 実際の値は .env.local に記載
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_***
 ```
 
 ## 3. 起動 (Run)

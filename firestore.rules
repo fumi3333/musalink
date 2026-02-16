@@ -13,25 +13,27 @@ service cloud.firestore {
     }
 
     // Helper: Enforce University Email (or specific Demo/Admin accounts)
+    // 匿名ログインは許可しない。書き込み権限は学内メール認証ユーザーのみ。
     function isVerifiedStudent() {
        return isAuthenticated() && (
          request.auth.token.email.matches('.*@stu.musashino-u.ac.jp') ||
          request.auth.token.email.matches('.*@musashino-u.ac.jp') ||
-         request.auth.token.email == 'demo@musashino-u.ac.jp' ||
-         // Allow anonymous auth for Guest Debug mode (identified by provider)
-         // Note: Anonymous auth has no email usually. 
-         // If we rely on is_demo flag in user doc, we trust the client too much for creation?
-         // For now, allow if firebase.sign_in_provider is 'anonymous'
-         request.auth.token.firebase.sign_in_provider == 'anonymous'
+         request.auth.token.email == 'demo@musashino-u.ac.jp'
        );
     }
 
-    // Users: Public Read (Profiles), Owner Write
+    // Users: Profiles (Public Read, Owner Write)
+    // Note: Sensitive data should be stored in /users/{userId}/private_data/profile
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false; // Admin only
+
+      // Private Data Subcollection (Strictly Owner Only)
+      match /private_data/{docId} {
+          allow read, write: if isOwner(userId);
+      }
 
       // Notifications Subcollection
       match /notifications/{notificationId} {
@@ -67,15 +69,15 @@ service cloud.firestore {
       allow create: if isVerifiedStudent() && request.resource.data.buyer_id == request.auth.uid;
       
       // Update: Buyer or Seller, BUT Restricted Status Changes
-      // Update: Buyer or Seller with Strict State Machine
+      // Update: Buyer or Seller with Strict State Machine（ホワイトリスト形式）
+      // payment_pending -> completed は Cloud Functions のみ（クライアントからは不可）
       allow update: if isVerifiedStudent() 
                     && (resource.data.buyer_id == request.auth.uid || resource.data.seller_id == request.auth.uid)
                     && (
-                      // 1. Allow updating non-protected fields (status unchanged)
-                      // e.g. meeting place, time
+                      // 1. status を変更しない更新（meeting_place 等のみ）
                       (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
                       ||
-                      // 2. Strict Status Transitions
+                      // 2. 厳密なステータス遷移のみ許可
                       (
                          // request_sent -> cancelled (Both) or approved (Seller only)
                          (resource.data.status == 'request_sent' && (
@@ -83,14 +85,14 @@ service cloud.firestore {
                             (request.resource.data.status == 'approved' && request.auth.uid == resource.data.seller_id)
                          ))
                          ||
-                         // approved -> cancelled (Both - before payment)
+                         // approved -> cancelled (Both。支払い前のみ。payment_pending 後は不可)
                          (resource.data.status == 'approved' && request.resource.data.status == 'cancelled')
                          ||
-                         // approved -> payment_pending (Buyer only - after Stripe Auth)
+                         // approved -> payment_pending (Buyer only。Stripe 認証後)
                          (resource.data.status == 'approved' && request.resource.data.status == 'payment_pending' && request.auth.uid == resource.data.buyer_id)
                       )
                       ||
-                      // 3. [DEMO EXCEPTION] Allow 'completed' ONLY for verified Demo users
+                      // 3. [DEMO EXCEPTION] completed は Demo 取引のみクライアントから許可
                       (
                         resource.data.is_demo == true 
                         && request.resource.data.status == 'completed'
@@ -113,9 +115,9 @@ service cloud.firestore {
                            && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
       }
     }
-    // Payout Requests
+    // Payout Requests（ドキュメントIDは自動採番のため、resource.data.userId で本人判定）
     match /payout_requests/{requestId} {
-      allow read: if isOwner(requestId) || request.auth.token.admin == true; // Admin or Owner
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || request.auth.token.admin == true);
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if false; // Immutable once requested
     }

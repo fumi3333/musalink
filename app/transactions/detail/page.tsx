@@ -6,14 +6,12 @@ import { toast } from 'sonner';
 import { getTransaction, getItem, getUser, updateTransactionStatus } from '@/services/firestore';
 import { Transaction, Item, User, TransactionStatus } from '@/types';
 import { TransactionDetailView } from '@/components/transaction/TransactionDetailView';
-import { functions } from '@/lib/firebase';
-import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '@/contexts/AuthContext';
 
 function TransactionDetailContent() {
     const searchParams = useSearchParams();
     const transactionId = searchParams.get('id');
-    const { userData } = useAuth(); // Get actual logged-in user
+    const { user, userData } = useAuth(); // Get actual logged-in user
 
     const [transaction, setTransaction] = useState<Transaction | null>(null);
     const [item, setItem] = useState<Item | null>(null);
@@ -49,14 +47,26 @@ function TransactionDetailContent() {
 
             if (tx.status === 'approved' && isBuyer) {
                 try {
-                    const createIntentFn = httpsCallable(functions, 'createPaymentIntent');
-                    // We assume userData has ID. 
-                    if (userData?.id) {
-                        const res = await createIntentFn({
-                            transactionId: tx.id,
-                            userId: userData.id
-                        }) as { data: { clientSecret: string } };
-                        setClientSecret(res.data.clientSecret);
+                    // Next.js API Routeプロキシ経由でCloud Functionsを呼び出し（CORS回避）
+                    if (userData?.id && user) {
+                        const token = await user.getIdToken();
+                        const response = await fetch('/api/create-payment-intent', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({
+                                transactionId: tx.id,
+                                userId: userData.id
+                            }),
+                        });
+                        if (!response.ok) {
+                            const errData = await response.json();
+                            throw new Error(errData.error || 'Payment intent creation failed');
+                        }
+                        const resData = await response.json();
+                        setClientSecret(resData.clientSecret);
                     }
                 } catch (intentErr) {
                     console.error("Failed to fetch payment intent", intentErr);
@@ -107,14 +117,23 @@ function TransactionDetailContent() {
                     });
                     toast.success("決済完了！(デモモード: Stripeスキップ)");
                 } else {
-                    // [SECURITY] Standard Flow
+                    // [SECURITY] Standard Flow - API Routeプロキシ経由
                     setLoading(true);
-                    const unlockFn = httpsCallable(functions, 'unlockTransaction');
-
-                    await unlockFn({
-                        transactionId: transactionId,
-                        userId: currentUser?.id
+                    const token = await user?.getIdToken();
+                    const unlockRes = await fetch('/api/unlock-transaction', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        },
+                        body: JSON.stringify({
+                            transactionId: transactionId,
+                            userId: currentUser?.id
+                        }),
                     });
+                    if (!unlockRes.ok) {
+                        throw new Error('Unlock failed');
+                    }
                 }
             } else {
                 // Other statuses (approve/reject) still use direct update for now (MVP)
@@ -127,7 +146,7 @@ function TransactionDetailContent() {
 
         } catch (e: any) {
             console.error("Failed to update status", e);
-            toast.error(`エラーが発生しました: ${e.message || "Unknown Error"}`);
+            toast.error(`エラーが発生しました: ${e.message || "不明なエラー"}`);
             // Revert optimism
             setTransaction(transaction); // Reset to original state
         } finally {
@@ -135,14 +154,14 @@ function TransactionDetailContent() {
         }
     };
 
-    if (!transactionId) return <div className="p-20 text-center">Invalid Transaction ID</div>;
+    if (!transactionId) return <div className="p-20 text-center">無効な取引IDです</div>;
     // Don't show loading forever if userData is missing (e.g. not logged in)
     // But for now, MVP assumes auth.
-    if (loading && !transaction) return <div className="p-20 text-center">Loading Transaction...</div>;
+    if (loading && !transaction) return <div className="p-20 text-center">取引を読み込み中...</div>;
 
     // Check missing data
-    if (!transaction || !item || !seller) return <div className="p-20 text-center">Data not found</div>;
-    if (!userData) return <div className="p-20 text-center">Please log in to view this transaction</div>;
+    if (!transaction || !item || !seller) return <div className="p-20 text-center">データが見つかりません</div>;
+    if (!userData) return <div className="p-20 text-center">この取引を表示するにはログインしてください</div>;
 
     return (
         <div className="min-h-screen bg-slate-50 py-10 px-4">
@@ -163,7 +182,7 @@ function TransactionDetailContent() {
 
 export default function TransactionDetailPage() {
     return (
-        <Suspense fallback={<div className="p-20 text-center">Loading...</div>}>
+        <Suspense fallback={<div className="p-20 text-center">読み込み中...</div>}>
             <TransactionDetailContent />
         </Suspense>
     );

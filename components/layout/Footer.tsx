@@ -15,10 +15,13 @@ export function Footer() {
                     <Link href="/legal/trade" className="hover:text-purple-600 transition-colors">
                         特定商取引法に基づく表記
                     </Link>
+                    <a href="https://forms.google.com/your-form-id" target="_blank" rel="noopener noreferrer" className="hover:text-purple-600 transition-colors">
+                        お問い合わせ
+                    </a>
 
                 </div>
                 <div>
-                    &copy; 2026 Musashino Link Project
+                    &copy; 2026 Musa Project
                 </div>
             </div>
         </footer>

@@ -4,8 +4,9 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { db } from "@/lib/firebase"
+import { db, auth } from "@/lib/firebase"
 import { addDoc, collection, serverTimestamp } from "firebase/firestore"
+import { getIdToken } from "firebase/auth"
 import { toast } from "sonner"
 import { CheckCircle, AlertTriangle } from "lucide-react"
 
@@ -38,13 +39,7 @@ export default function PayoutPage() {
             await addDoc(collection(db, "payout_requests"), {
                 userId: userData.id,
                 amount: balance,
-                bankInfo: { // Mocked Bank Info for Audit
-                    bankName: "三菱UFJ銀行",
-                    branchName: "本店",
-                    accountType: "ordinary",
-                    accountNumber: "****1234",
-                    accountHolder: "MOCK USER"
-                },
+                // bankInfo removed for security/compliance. Stripe Connect handles payouts.
                 status: 'pending',
                 createdAt: serverTimestamp()
             });
@@ -61,7 +56,7 @@ export default function PayoutPage() {
         }
     };
 
-    if (loading) return <div className="p-10 text-center">Loading...</div>;
+    if (loading) return <div className="p-10 text-center">読み込み中...</div>;
 
     if (status === 'success') {
         return (
@@ -105,39 +100,113 @@ export default function PayoutPage() {
                     <CardTitle className="text-sm font-bold">振込先口座情報</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {/* Mock Stripe Status */}
+                    {/* Stripe Connect Status */}
                     <div className="bg-white border rounded-lg p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="bg-[#635BFF] p-2 rounded text-white">
-                                {/* Stripe Logo Icon (approx) */}
                                 <svg role="img" viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.895-1.352 2.622-1.352 1.856 0 2.846.596 3.042.73l.535-3.197C15.79.915 14.54 0 12.025 0c-3.5 0-5.748 1.86-5.748 5.062 0 2.925 1.76 4.39 4.908 5.488 2.378.83 3.018 1.54 3.018 2.493 0 1.097-1.123 1.636-2.902 1.636-2.227 0-3.352-.619-3.71-.875l-.558 3.256c.945 1.046 2.637 1.487 4.54 1.487 3.738 0 6.07-1.93 6.07-5.223 0-2.818-1.579-4.347-3.667-5.174z" /></svg>
                             </div>
                             <div>
-                                <p className="font-bold text-sm text-slate-700">Stripe Connect</p>
-                                <p className="text-xs text-green-600 font-medium flex items-center">
-                                    <CheckCircle className="w-3 h-3 mr-1" />
-                                    連携済み (Connected)
-                                </p>
+                                <p className="font-bold text-sm text-slate-700">ストライプ連携</p>
+                                {userData?.stripe_connect_id ? (
+                                    <p className="text-xs text-green-600 font-medium flex items-center">
+                                        <CheckCircle className="w-3 h-3 mr-1" />
+                                        連携済み
+                                    </p>
+                                ) : (
+                                    <p className="text-xs text-slate-500">
+                                        未連携
+                                    </p>
+                                )}
                             </div>
                         </div>
-                        <Button variant="outline" size="sm" className="text-xs h-8" disabled>
-                            設定
-                        </Button>
-                    </div>
+                        
+                        {userData?.stripe_connect_id ? (
+                            <div className="flex gap-2">
+                             <Button variant="outline" size="sm" className="text-xs h-8" onClick={async () => {
+                                 // Dashboard Link (Login Link)
+                                 const { httpsCallable } = await import('firebase/functions');
+                                 const { functions } = await import('@/lib/firebase');
+                                 toast.info("ダッシュボードを開いています...");
+                                 try {
+                                     // Use dedicated Login Link function
+                                     const createLink = httpsCallable(functions, 'createStripeLoginLink');
+                                     const res = await createLink({ 
+                                         accountId: userData.stripe_connect_id 
+                                     }) as any;
+                                     
+                                     if (res.data.error) {
+                                         throw new Error(res.data.error);
+                                     }
+                                     
+                                     window.location.href = res.data.url;
+                                 } catch(e: any) { 
+                                     console.error(e);
+                                     toast.error("リンク作成エラー: " + e.message); 
+                                 }
+                             }}>
+                                 設定
+                             </Button>
+                             {/* Debug: Disconnect Button */}
+                             <Button variant="ghost" size="sm" className="text-xs h-8 text-red-400 hover:text-red-500 hover:bg-red-50" onClick={async () => {
+                                 if(!confirm("連携を解除しますか？\n（IDをリセットします。Stripeアカウント自体は削除されません）")) return;
+                                 const { doc, updateDoc } = await import('firebase/firestore');
+                                 const { db } = await import('@/lib/firebase');
+                                 try {
+                                     await updateDoc(doc(db, "users", userData.id), {
+                                         stripe_connect_id: null,
+                                         charges_enabled: false
+                                     });
+                                     toast.success("連携を解除しました");
+                                     window.location.reload();
+                                 } catch(e) { toast.error("解除エラー"); }
+                             }}>
+                                 解除
+                             </Button>
+                            </div>
+                        ) : (
+                            <Button 
+                                size="sm" 
+                                className="text-xs h-8 bg-[#635BFF] hover:bg-[#544DC8] text-white"
+                                onClick={async () => {
+                                    if(!userData?.id) return;
+                                    
+                                    toast.info("Stripeアカウントを作成中...");
+                                    try {
+                                        const idToken = await getIdToken(auth.currentUser!, true);
+                                        const res = await fetch('/api/stripe-connect', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Authorization': `Bearer ${idToken}`,
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({
+                                                email: userData.email || userData.university_email,
+                                                returnUrl: window.location.href,
+                                                refreshUrl: window.location.href
+                                            })
+                                        });
 
-                    {/* Mock Bank Info */}
-                    <div className="space-y-2">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">振込先口座 (Registered Bank)</p>
-                        <div className="flex items-center justify-between p-3 bg-slate-100 rounded border border-slate-200">
-                            <div className="flex items-center gap-2">
-                                <div className="text-2xl opacity-50">🏦</div>
-                                <div>
-                                    <p className="text-sm font-bold text-slate-700">三菱UFJ銀行</p>
-                                    <p className="text-xs text-slate-500">普通 •••• 1234</p>
-                                </div>
-                            </div>
-                            <span className="text-xs text-slate-400">確認済み</span>
-                        </div>
+                                        const data = await res.json();
+                                        if (!res.ok) {
+                                            throw new Error(data.error || "接続エラー");
+                                        }
+
+                                        if (data.url) {
+                                            toast.success("連携画面へ移動します");
+                                            window.location.href = data.url;
+                                        } else {
+                                            throw new Error("レスポンスにURLが含まれていません");
+                                        }
+                                    } catch(e: any) {
+                                        console.error(e);
+                                        toast.error("連携エラー: " + e.message); 
+                                    }
+                                }}
+                            >
+                                連携する
+                            </Button>
+                        )}
                     </div>
 
                     <div className="pt-4 border-t border-slate-100">

@@ -1,39 +1,39 @@
 ---
-description: How to set up a new project with secure secret blocking (Husky + Secret Scanner)
+description: 新規プロジェクトの安全なセットアップ手順 (Husky + シークレットスキャン)
 ---
 
-# Secure Project Setup Workflow
+# セキュアプロジェクトセットアップワークフロー
 
-When starting ANY new project with the user, follow these steps immediately after `git init`.
+ユーザーと新しいプロジェクトを開始する際は、`git init` の直後に以下の手順を実行してください。
 
-## 1. Install Husky
+## 1. Huskyのインストール
 ```bash
 npm install --save-dev husky
 npx husky init
 ```
 
-## 2. Create Secret Scanning Script
-Create `scripts/check-secrets.js` with the following content:
+## 2. シークレットスキャン用スクリプトの作成
+以下の内容で `scripts/check-secrets.js` を作成してください:
 
 ```javascript
 const fs = require('fs');
 const { execSync } = require('child_process');
 
-// ... (Use the standard secret scanning script content) ...
-// Ensure it scans for sk_test_, pk_test_, etc.
+// ... (標準的なシークレットスキャン用スクリプトの内容を使用) ...
+// sk_test_, pk_test_ などを確実にスキャンするようにしてください。
 ```
-*(Copy the full script from the Musashino Link project implementation)*
+*(Musashino Link プロジェクトの実装から完全なスクリプトをコピーしてください)*
 
-## 3. Configure Pre-commit Hook
-Write to `.husky/pre-commit`:
+## 3. プレコミットフックの設定
+`.husky/pre-commit` に以下を書き込んでください:
 ```bash
 npm run check-secrets
 ```
 
-## 4. Add Script to package.json
-Add `"check-secrets": "node scripts/check-secrets.js"` to `package.json`.
+## 4. package.jsonへのスクリプト追加
+`package.json` に `"check-secrets": "node scripts/check-secrets.js"` を追加してください。
 
-## 5. Verify
-Run `npm run check-secrets` to ensure it works.
+## 5. 動作確認
+`npm run check-secrets` を実行して動作を確認してください。
 
 // turbo-all

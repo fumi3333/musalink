@@ -1,4 +1,4 @@
-export const APP_NAME = "Musashino Link";
+export const APP_NAME = "Musa";
 
 // 費用の設定
 // 費用の設定
@@ -14,3 +14,22 @@ export const calculateFee = (price: number): number => {
 
 // 学内ドメイン
 export const ALLOWED_DOMAIN = "stu.musashino-u.ac.jp";
+
+// Feature Flags
+export const IS_BETA = process.env.NEXT_PUBLIC_IS_BETA === 'true';
+
+// 出品カテゴリー（教科書以外も出品可能）
+import type { ItemCategory } from '@/types';
+
+export const ITEM_CATEGORIES: { value: ItemCategory; label: string }[] = [
+    { value: 'book', label: '教科書・書籍' },
+    { value: 'electronics', label: '家電・デジタル' },
+    { value: 'furniture', label: '家具・生活' },
+    { value: 'variety', label: '面白枠・その他' },
+    { value: 'others', label: 'その他' },
+];
+
+export function getItemCategoryLabel(category: ItemCategory | undefined): string {
+    if (!category) return 'その他';
+    return ITEM_CATEGORIES.find(c => c.value === category)?.label ?? category;
+}

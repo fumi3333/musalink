@@ -26,7 +26,7 @@ async function sendEmail(to: string, subject: string, text: string, html?: strin
     }
 
     const mailOptions = {
-        from: `"Musashino Link" <${gmailEmail}>`,
+        from: `"Musa" <${gmailEmail}>`,
         to: to,
         subject: subject,
         text: text,
@@ -65,7 +65,7 @@ export const onTransactionCreated = functions.firestore
         const itemDoc = await db.collection("items").doc(tx.item_id).get();
         const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
-        const subject = `【Musashino Link】商品「${itemTitle}」が購入されました！`;
+        const subject = `【Musa】商品「${itemTitle}」が購入されました！`;
         const text = `${seller.display_name}様\n\nあなたの出品した「${itemTitle}」に購入リクエストが入りました！\n\nアプリを開いて確認・承認してください。\nhttps://musa-link.web.app/transactions/detail?id=${context.params.transactionId}`;
 
         // 1. Create In-App Notification
@@ -111,7 +111,7 @@ export const onMessageCreated = functions.firestore
         // Rate Limit / Spam Prevention Logic?
         // Check local "Do Not Disturb"? (Skipped for MVP)
 
-        const subject = `【Musashino Link】新着メッセージが届きました`;
+        const subject = `【Musa】新着メッセージが届きました`;
         const text = `${recipient.display_name}様\n\n取引相手からメッセージが届きました。\n\n「${msg.text.substring(0, 50)}${msg.text.length > 50 ? '...' : ''}」\n\n返信はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${conversationId}#chat`;
 
         // 1. Create In-App Notification
@@ -127,5 +127,82 @@ export const onMessageCreated = functions.firestore
         // 2. Send Email
         if (recipientEmail) {
             await sendEmail(recipientEmail, subject, text);
+        }
+    });
+
+// 3. On Transaction Updated -> Notify Status Changes
+export const onTransactionUpdated = functions.firestore
+    .document('transactions/{transactionId}')
+    .onUpdate(async (change, context) => {
+        const before = change.before.data();
+        const after = change.after.data();
+        const transactionId = context.params.transactionId;
+
+        const statusBefore = before.status;
+        const statusAfter = after.status;
+
+        if (statusBefore === statusAfter) return; // No status change
+
+        // 1. Request Approved (request_sent -> approved) -> Notify Buyer
+        if (statusBefore === 'request_sent' && statusAfter === 'approved') {
+            const buyerId = after.buyer_id;
+            const buyerDoc = await db.collection("users").doc(buyerId).get();
+            if (!buyerDoc.exists) return;
+            const buyer = buyerDoc.data()!;
+            const buyerEmail = buyer.university_email || buyer.email;
+
+            // Fetch Item Title
+            const itemDoc = await db.collection("items").doc(after.item_id).get();
+            const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
+
+            const subject = `【Musa】購入リクエストが承認されました！`;
+            const text = `${buyer.display_name}様\n\n「${itemTitle}」の購入リクエストが承認されました。\n\n以下のリンクから支払いを完了させてください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}`;
+
+            // In-App
+            await db.collection("users").doc(buyerId).collection("notifications").add({
+                type: "transaction_updated",
+                title: "リクエスト承認",
+                body: `「${itemTitle}」が承認されました。支払いに進んでください。`,
+                link: `/transactions/detail?id=${transactionId}`,
+                createdAt: admin.firestore.Timestamp.now(),
+                read: false
+            });
+
+            // Email
+            if (buyerEmail) {
+                await sendEmail(buyerEmail, subject, text);
+            }
+        }
+
+        // 2. Transaction Completed / Paid (any -> completed) -> Notify Seller (Payment Received)
+        // Note: 'completed' in this system means Payment is triggers unlock.
+        if (statusBefore !== 'completed' && statusAfter === 'completed') {
+            const sellerId = after.seller_id;
+            const sellerDoc = await db.collection("users").doc(sellerId).get();
+            if (!sellerDoc.exists) return;
+            const seller = sellerDoc.data()!;
+            const sellerEmail = seller.university_email || seller.email;
+
+            // Fetch Item Title
+            const itemDoc = await db.collection("items").doc(after.item_id).get();
+            const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
+
+            const subject = `【Musa】支払いが完了しました（${itemTitle}）`;
+            const text = `${seller.display_name}様\n\n「${itemTitle}」の支払いが完了し、取引が成立しました。\n\n購入者と連絡を取り、商品の受け渡しを行ってください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}`;
+
+            // In-App
+            await db.collection("users").doc(sellerId).collection("notifications").add({
+                type: "transaction_updated",
+                title: "支払い完了",
+                body: `「${itemTitle}」の支払いが完了しました。受け渡しを行ってください。`,
+                link: `/transactions/detail?id=${transactionId}`,
+                createdAt: admin.firestore.Timestamp.now(),
+                read: false
+            });
+
+            // Email
+            if (sellerEmail) {
+                await sendEmail(sellerEmail, subject, text);
+            }
         }
     });

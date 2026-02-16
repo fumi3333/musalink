@@ -120,7 +120,7 @@ export const createItem = async (item: Omit<Item, 'id'>) => {
     }
 };
 
-export const getItems = async (filters?: { department?: string, grade?: string, keyword?: string }): Promise<Item[]> => {
+export const getItems = async (filters?: { department?: string, grade?: string, keyword?: string, category?: string }): Promise<Item[]> => {
     try {
         // Build constraints
         // Listing中のアイテムのみ取得 (日時降順)
@@ -130,6 +130,10 @@ export const getItems = async (filters?: { department?: string, grade?: string, 
 
         const constraints: any[] = [where("status", "==", "listing")];
 
+        // category フィルタ: "book" は未設定の既存データも含めたいので Firestore では絞らずクライアントで判定
+        if (filters?.category && filters.category !== "all" && filters.category !== "book") {
+            constraints.push(where("category", "==", filters.category));
+        }
         if (filters?.department && filters.department !== "all") {
             constraints.push(where("metadata.seller_department", "==", filters.department));
         }
@@ -160,6 +164,11 @@ export const getItems = async (filters?: { department?: string, grade?: string, 
             ...doc.data()
         } as Item));
 
+        // カテゴリーが "book" のときは Firestore で絞っていないため、ここで教科書のみに絞る（未設定は教科書扱い）
+        if (filters?.category && filters.category === "book") {
+            results = results.filter(item => !item.category || item.category === "book");
+        }
+
         // Client-side Keyword Filter
         if (filters?.keyword) {
             const lowerKw = filters.keyword.toLowerCase();
@@ -172,7 +181,7 @@ export const getItems = async (filters?: { department?: string, grade?: string, 
         // [Analytics] Log Search Miss (Zero Results)
         if (results.length === 0) {
             // Only log if meaningful search (filters or keyword exist)
-            const hasFilters = filters?.department !== "all" || filters?.grade !== "all" || !!filters?.keyword;
+            const hasFilters = filters?.category !== "all" || filters?.department !== "all" || filters?.grade !== "all" || !!filters?.keyword;
 
             if (hasFilters) {
                 const logKw = filters?.keyword || "filter_only";
@@ -377,6 +386,34 @@ export const updateUser = async (userId: string, data: Partial<User>) => {
         throw e;
     }
 };
+
+export const getPrivateProfile = async (userId: string): Promise<any> => {
+    try {
+        const docRef = doc(db, "users", userId, "private_data", "profile");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return docSnap.data();
+        }
+        return null;
+    } catch (e) {
+        console.error("Error fetching private profile:", e);
+        return null;
+    }
+};
+
+export const updatePrivateProfile = async (userId: string, data: any) => {
+    try {
+        const docRef = doc(db, "users", userId, "private_data", "profile");
+        await setDoc(docRef, {
+            ...data,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+    } catch (e) {
+        console.error("Error updating private profile:", e);
+        throw e;
+    }
+};
+
 // --- MyPage / Dashboard Services ---
 
 export const getMyItems = async (userId: string): Promise<Item[]> => {

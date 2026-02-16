@@ -38,86 +38,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 // Handle Anonymous / Debug Users
                 if (firebaseUser.isAnonymous) {
-                    const debugRole = localStorage.getItem('debug_user_role');
-
-                    // Fix: If no debug role is set in session (e.g. fresh load), 
-                    // but we have an anonymous user, force logout to ensure clean start.
-                    if (!debugRole) {
-                        console.log("Found anonymous user but no debug role. Signing out for clean start.");
-                        await signOut(auth);
-                        setUser(null);
-                        setUserData(null);
-                        setLoading(false);
-                        return;
-                    }
-
-                    const role = debugRole || 'seller'; // fallback actually handled by if above
-                    const isBuyer = role === 'buyer';
-                    setUserData({
-                        id: firebaseUser.uid, // Use REAL Anonymous UID
-                        university_email: isBuyer ? "s1111111@stu.musashino-u.ac.jp" : "s2527084@stu.musashino-u.ac.jp",
-                        student_id: isBuyer ? "s1111111" : "s2527084",
-                        display_name: isBuyer ? "Guest Buyer" : "Test User (s2527084)",
-                        is_verified: true,
-                        charges_enabled: true,
-                        is_demo: true, // Flag for Rules
-                        coin_balance: 10000,
-                        // Enhanced Profile Data
-                        departmentId: isBuyer ? 'Economics' : 'Law',
-                        universityId: 'musashino',
-                        grade: isBuyer ? 'B4' : 'B1', // s11(Old) vs s25(New)
-                        interests: ['Law', 'Economics']
-                    });
+                     // Production Cleanup: Anonymous login is disabled for security.
+                     console.warn("Anonymous login is not supported in production.");
+                     await signOut(auth);
+                     setUser(null);
+                     setUserData(null);
+                     setLoading(false);
+                     return;
                 } else {
                     // Real Google Users
                     try {
                         const userRef = doc(db, "users", firebaseUser.uid);
-                        const userSnap = await getDoc(userRef);
+                        const privateRef = doc(db, "users", firebaseUser.uid, "private_data", "profile");
+
+                        // Parallel Fetch: Public Profile + Private Data
+                        const [userSnap, privateSnap] = await Promise.all([
+                            getDoc(userRef),
+                            getDoc(privateRef)
+                        ]);
+
+                        let finalUserData: any = {};
 
                         if (userSnap.exists()) {
-                            setUserData(userSnap.data());
+                            finalUserData = { ...userSnap.data(), id: firebaseUser.uid };
+                        }
+                        
+                        // Merge Private Data (e.g. Email, Stripe ID, Real Name)
+                        if (privateSnap.exists()) {
+                            finalUserData = { ...finalUserData, ...privateSnap.data() };
+                        }
+                        // Ensure id is always set (document id is not in .data())
+                        finalUserData.id = firebaseUser.uid;
 
-                            // [Data Strategy] Auto-populate Grade/Dept from Email if missing
-                            const data = userSnap.data();
+                        if (userSnap.exists() || privateSnap.exists()) {
+                            setUserData(finalUserData);
+
+                            // [Data Strategy] Auto-populate Grade/Dept/Email
+                            // We now store Email in PRIVATE data for security, but allow it in Public if needed? 
+                            // Actually rules say Public is readable by all auth users. Email should be PRIVATE.
                             
-                            // [Multi-Tenancy] Resolve University ID
                             const email = firebaseUser.email || "";
                             const universityId = getUniversityFromEmail(email);
 
-                            // Strict Domain Enforcement (Foundation for Multi-Tenancy)
+                            // Strict Domain Enforcement
                             if (!universityId) {
                                 console.warn("Blocked unsupported domain:", email);
                                 await signOut(auth);
                                 setUser(null);
                                 setUserData(null);
-                                toast.error("この大学のメールアドレスは現在対応していません (Musashino Only)");
+                                toast.error("この大学のメールアドレスは現在対応していません（武蔵野大学のみ）");
                                 setLoading(false);
                                 return;
                             }
 
-                            if (!data.grade || !data.departmentId || !data.universityId) {
+                            // updates logic
+                            // We split updates: Public vs Private
+                            const publicUpdates: any = {};
+                            const privateUpdates: any = {};
+
+                            if (!finalUserData.universityId) publicUpdates.universityId = universityId;
+                            
+                            // Grade Calculation
+                            if (!finalUserData.grade) {
                                 const derivedGrade = calculateGrade(email);
-                                // Default Dept to 'Unknown' or try to guess? 'Unknown' for now.
-
-                                if (derivedGrade !== "Unknown" || !data.universityId) {
-                                    // Update Firestore
-                                    const updates: any = {
-                                        email: email, // Ensure email is synced
-                                        universityId: universityId
-                                    };
-                                    
-                                    if (!data.grade) updates.grade = derivedGrade;
-                                    if (!data.departmentId) updates.departmentId = "Unknown";
-
-                                    await setDoc(userRef, updates, { merge: true });
-
-                                    // Update State
-                                    setUserData({ ...data, ...updates });
-                                }
+                                if (derivedGrade !== "不明") publicUpdates.grade = derivedGrade;
                             }
+                            if (!finalUserData.departmentId) publicUpdates.departmentId = "不明";
+                            
+                            // Private: Ensure email is sync
+                            if (finalUserData.email !== email) privateUpdates.email = email;
+
+                            // Apply Updates
+                            if (Object.keys(publicUpdates).length > 0) {
+                                await setDoc(userRef, publicUpdates, { merge: true });
+                                finalUserData = { ...finalUserData, ...publicUpdates };
+                            }
+
+                            if (Object.keys(privateUpdates).length > 0) {
+                                await setDoc(privateRef, privateUpdates, { merge: true });
+                                finalUserData = { ...finalUserData, ...privateUpdates };
+                            }
+                            
+                            setUserData(finalUserData);
+
                         } else {
-                            // First time login or document missing?
-                            // Logic for creating user doc could go here if needed
+                            // First time login - Create Skeleton
+                            // ... (Logic omitted for brevity, but should respect split)
                         }
                     } catch (e: any) {
                         console.warn("Fetch user data error:", e);
@@ -195,16 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const debugLogin = async (role: 'seller' | 'buyer' = 'seller') => {
-        try {
-            localStorage.setItem('debug_user_role', role);
-            const { signInAnonymously } = await import('firebase/auth');
-            await signInAnonymously(auth);
-            toast.success(`テスト用アカウント(${role})でログインしました`);
-        } catch (e: any) {
-            console.error("Debug Login Error", e);
-            localStorage.removeItem('debug_user_role');
-            toast.error("テストログインに失敗しました");
-        }
+        toast.error("デモログインは無効化されました");
     };
 
     return (
@@ -217,7 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
     const context = useContext(AuthContext);
     if (context === undefined) {
-        throw new Error("useAuth must be used within an AuthProvider");
+        throw new Error("useAuth は AuthProvider 内で使用してください");
     }
     return context;
 }
@@ -225,9 +222,9 @@ export function useAuth() {
 // Helper: Extract Grade from Student ID in Email
 // Format: s25xxxx@... -> Entry 2025 -> Current 2026(Jan) -> Acad 2025 -> Grade 1
 function calculateGrade(email: string): string {
-    if (!email) return "Unknown";
+    if (!email) return "不明";
     const match = email.match(/^s(\d{2})/);
-    if (!match) return "Unknown";
+    if (!match) return "不明";
 
     // s25 -> 2025
     const entryYearShort = parseInt(match[1]);
@@ -247,7 +244,7 @@ function calculateGrade(email: string): string {
     if (gradeNum === 2) return "B2";
     if (gradeNum === 3) return "B3";
     if (gradeNum === 4) return "B4";
-    return "Other";
+    return "その他";
 }
 
 // [Multi-Tenancy] Identify University from Email Domain

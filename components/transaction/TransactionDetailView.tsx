@@ -41,6 +41,7 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
 }) => {
     const [copied, setCopied] = useState(false);
     const [meetingPlace, setMeetingPlace] = useState(transaction.meeting_place || "");
+    const [showSellerInfo, setShowSellerInfo] = useState(false); // Default Hidden (Privacy)
 
     let isBuyer = currentUser.id === transaction.buyer_id;
     let isSeller = currentUser.id === transaction.seller_id;
@@ -66,7 +67,7 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
         return `${sellerName}${verifiedTag} 先輩
 
 本日、${itemName} をお譲りいただき、感謝いたします。
-Musashino Linkで連絡先を確認しました。
+Musaで連絡先を確認しました。
 受け渡し場所の相談などをさせていただきたく存じます。${placeText}
 
 学部・学科
@@ -142,16 +143,8 @@ Musashino Linkで連絡先を確認しました。
     const handleCapturePayment = async () => {
         const { toast } = await import('sonner');
 
-        // [Robust Demo Check]
-        const isDemo = currentUser.is_demo === true ||
-            currentUser.university_email?.startsWith('s2527') ||
-            currentUser.university_email?.startsWith('s11111');
-
-        if (isDemo) {
-            toast.success("デモ決済: 受取完了");
-            onStatusChange('completed');
-            return;
-        }
+        // Demo bypass removed for production security.
+        // const isDemo = ...
 
         const { httpsCallable } = await import('firebase/functions');
         const { functions } = await import('@/lib/firebase');
@@ -167,10 +160,43 @@ Musashino Linkで連絡先を確認しました。
         }
     };
 
+
+
+    // [New] Cancel / Refund Logic
+    const handleCancel = async (reason: string) => {
+        if (!confirm("本当にキャンセルしますか？\n（決済済みの場合は返金処理が行われます）")) return;
+
+        const { httpsCallable } = await import('firebase/functions');
+        const { functions } = await import('@/lib/firebase');
+
+        toast.info("キャンセル処理中...", { duration: 5000 });
+        try {
+            const cancelFn = httpsCallable(functions, 'cancelTransaction');
+            await cancelFn({ transactionId: transaction.id, reason });
+            toast.success("取引をキャンセルしました");
+            onStatusChange('cancelled');
+            window.location.reload();
+        } catch (e: any) {
+            console.error(e);
+            toast.error("キャンセルに失敗しました: " + e.message);
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Visual Stepper */}
             <TransactionStepper status={transaction.status} />
+
+            {/* --- 0. Cancelled View --- */}
+            {transaction.status === 'cancelled' && (
+                <Card className="border-2 border-slate-100 bg-slate-50">
+                     <CardContent className="pt-6 text-center text-slate-500">
+                        <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+                        <p>この取引はキャンセルされました</p>
+                        <p className="text-xs mt-1">理由: {transaction.cancel_reason || "ユーザー都合"}</p>
+                     </CardContent>
+                </Card>
+            )}
 
             {/* --- 1. Request Sent Phase --- */}
             {transaction.status === 'request_sent' && (
@@ -200,7 +226,7 @@ Musashino Linkで連絡先を確認しました。
                                 <Button
                                     variant="outline"
                                     className="w-full text-red-500 border-red-200 hover:bg-red-50"
-                                    onClick={() => onStatusChange('cancelled')}
+                                    onClick={() => handleCancel("出品者がリクエストを拒否")}
                                 >
                                     拒否する
                                 </Button>
@@ -211,7 +237,7 @@ Musashino Linkで連絡先を確認しました。
                             <Button
                                 variant="outline"
                                 className="w-full text-slate-500"
-                                onClick={() => onStatusChange('cancelled')}
+                                onClick={() => handleCancel("買い手がリクエストを取り下げ")}
                             >
                                 リクエストを取り下げる
                             </Button>
@@ -283,7 +309,7 @@ Musashino Linkで連絡先を確認しました。
                                             className="w-full bg-slate-600 hover:bg-slate-700"
                                             onClick={() => onStatusChange('payment_pending')}
                                         >
-                                            デモ用: 支払いをスキップ (Force Pay)
+                                            デモ用: 支払いをスキップ
                                         </Button>
                                     </div>
                                 )}
@@ -341,24 +367,7 @@ Musashino Linkで連絡先を確認しました。
                                                         カメラを起動して読み取る
                                                     </span>
                                                 </Button>
-                                                {/* Fallback/Demo Button kept for safety if camera fails */}
-                                                <button
-                                                    onClick={() => {
-                                                        const isDemo = currentUser.is_demo === true ||
-                                                            currentUser.university_email?.startsWith('s2527') ||
-                                                            currentUser.university_email?.startsWith('s11111');
-
-                                                        if (isDemo) {
-                                                            toast.success("デモ決済: バーコードを読み取りました");
-                                                            onStatusChange('completed');
-                                                            return;
-                                                        }
-                                                        toast.error("カメラを使用してください");
-                                                    }}
-                                                    className="text-xs text-slate-400 underline hover:text-slate-600"
-                                                >
-                                                    (デモ用: カメラが使えない場合はこちら)
-                                                </button>
+                                                {/* Demo fallback removed */}
                                             </div>
                                         ) : (
                                             <div className="space-y-4">
@@ -409,13 +418,46 @@ Musashino Linkで連絡先を確認しました。
                             </p>
                         </div>
 
-                        {/* Revealable Content */}
+                        {/* Revealable Content (Privacy Protected) */}
                         <div className="space-y-4">
-                            <RevealableContent
-                                title="出品者情報 (Seller Info)"
-                                isUnlocked={true}
-                                content={transaction.unlocked_assets || {}}
-                            />
+                            {!showSellerInfo ? (
+                                <div className="bg-white p-4 rounded-lg border border-slate-200 text-center space-y-3">
+                                    <div className="text-slate-500 text-sm">
+                                        <p className="font-bold flex items-center justify-center gap-2">
+                                            <Lock className="w-4 h-4" /> 出品者情報は非表示です
+                                        </p>
+                                        <p className="text-xs mt-1">通常、連絡先の交換は不要です。アプリ内で完結します。</p>
+                                    </div>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => {
+                                            if (confirm("【警告】\n出品者の個人情報（学生番号・メール）を表示します。\n\n通常、取引はチャットのみで完了します。\n相手と連絡が取れないなどの「トラブル時のみ」使用してください。\n\n表示しますか？")) {
+                                                setShowSellerInfo(true);
+                                            }
+                                        }}
+                                        className="text-xs text-slate-400 hover:text-red-500 hover:border-red-200"
+                                    >
+                                        トラブル等のため表示する
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <RevealableContent
+                                        title="出品者情報 (Seller Info)"
+                                        isUnlocked={true}
+                                        content={transaction.unlocked_assets || {}}
+                                    />
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="w-full text-xs text-slate-400"
+                                        onClick={() => setShowSellerInfo(false)}
+                                    >
+                                        情報を隠す（非表示）
+                                    </Button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Handover Actions */}
@@ -440,7 +482,10 @@ Musashino Linkで連絡先を確認しました。
                                                         try {
                                                             await rateUser(ratedUserId, transaction.id, isBuyer ? 'buyer' : 'seller', score);
                                                             toast.success("評価を送信しました！");
-                                                            window.location.reload();
+                                                            // Redirect to MyPage (Transaction Complete)
+                                                            setTimeout(() => {
+                                                                window.location.href = '/mypage';
+                                                            }, 1000);
                                                         } catch (e) {
                                                             toast.error("評価に失敗しました");
                                                         }

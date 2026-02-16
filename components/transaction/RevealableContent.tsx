@@ -20,7 +20,7 @@ interface RevealableContentProps {
  * isUnlocked が true の場合: content (Map) の中身を自動的にリスト展開して表示
  */
 export const RevealableContent: React.FC<RevealableContentProps> = ({
-    title = "Unlockable Content",
+    title = "アンロック可能な内容",
     isUnlocked,
     content,
     lockedMessage = "情報の鍵がかかっています",
@@ -61,7 +61,7 @@ export const RevealableContent: React.FC<RevealableContentProps> = ({
                     {Object.entries(content).map(([key, value]) => (
                         <div key={key} className="grid grid-cols-[1fr_2fr] sm:grid-cols-[120px_1fr] px-4 py-3 text-sm">
                             <dt className="font-medium text-green-700 truncate capitalize">
-                                {key.replace(/_/g, ' ')} {/* student_id -> student id */}
+                                {({ student_id: '学籍番号', university_email: '大学メール', unlockedAt: 'アンロック日時' } as Record<string, string>)[key] ?? key.replace(/_/g, ' ')}
                             </dt>
                             <dd className="text-green-900 break-words font-mono sm:font-sans">
                                 {String(value)}

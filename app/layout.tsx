@@ -19,7 +19,7 @@ import { Footer } from "@/components/layout/Footer";
 import { InAppBrowserGuard } from "@/components/layout/InAppBrowserGuard"; // [New]
 
 export const metadata: Metadata = {
-  title: "Musashino Link",
+  title: "Musa",
   description: "武蔵野大学生専用マーケットプレイス",
 };
 

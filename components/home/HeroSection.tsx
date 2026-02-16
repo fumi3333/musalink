@@ -23,7 +23,7 @@ export const HeroSection = () => {
                 </h1>
 
                 <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-                    Musashino Linkは、先輩から後輩へ、教科書やアイテムを
+                    Musaは、先輩から後輩へ、教科書やアイテムを
                     <br className="hidden md:block" />
                     安全に継承するための学内限定フリマアプリです。
                 </p>

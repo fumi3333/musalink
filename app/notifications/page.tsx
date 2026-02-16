@@ -54,7 +54,7 @@ export default function NotificationsPage() {
     };
 
     if (authLoading || loading) {
-        return <div className="min-h-screen pt-20 text-center text-slate-500">Loading notifications...</div>;
+        return <div className="min-h-screen pt-20 text-center text-slate-500">お知らせを読み込み中...</div>;
     }
 
     const unreadCount = notifications.filter(n => !n.read).length;
@@ -107,7 +107,7 @@ export default function NotificationsPage() {
                                                 {notification.title}
                                             </h3>
                                             <span className="text-[10px] text-slate-400 whitespace-nowrap ml-2">
-                                                {notification.createdAt?.toDate ? notification.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                                                {notification.createdAt?.toDate ? notification.createdAt.toDate().toLocaleDateString() : 'たった今'}
                                             </span>
                                         </div>
                                         <p className="text-xs text-slate-500 line-clamp-2">

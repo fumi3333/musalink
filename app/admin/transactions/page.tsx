@@ -175,7 +175,7 @@ export default function AdminTransactionsPage() {
                                             const { httpsCallable, getFunctions } = await import('firebase/functions');
                                             const functions = getFunctions();
                                             const cancelFn = httpsCallable(functions, 'adminCancelTransaction');
-                                            await cancelFn({ transactionId: tx.id, reason: "Manual Admin Cancel" });
+                                            await cancelFn({ transactionId: tx.id, reason: "管理者による手動キャンセル" });
                                             alert("キャンセルしました");
                                             fetchTxs(); // Refresh
                                         } catch (e: any) {
@@ -183,7 +183,7 @@ export default function AdminTransactionsPage() {
                                         }
                                     }}
                                 >
-                                    Force Cancel
+                                    強制キャンセル
                                 </Button>
                             </div>
                         </CardContent>
