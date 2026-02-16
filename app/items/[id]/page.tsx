@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { use, useEffect, useState } from 'react';
 import { Item, User } from '@/types';
 import { getItem, getUser } from '@/services/firestore';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getItemCategoryLabel } from '@/lib/constants';
 
-export default function ItemDetail({ params }: { params: { id: string } }) {
+export default function ItemDetail({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = use(params);
     const [item, setItem] = useState<Item | null>(null);
     const [seller, setSeller] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
@@ -20,10 +21,9 @@ export default function ItemDetail({ params }: { params: { id: string } }) {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const itemData = await getItem(params.id);
+                const itemData = await getItem(id);
                 if (itemData) {
                     setItem(itemData);
-                    // Load Seller Info
                     try {
                         const sellerData = await getUser(itemData.seller_id);
                         if (sellerData) setSeller(sellerData);
@@ -38,7 +38,7 @@ export default function ItemDetail({ params }: { params: { id: string } }) {
             }
         };
         loadData();
-    }, [params.id]);
+    }, [id]);
 
     if (loading) return <div className="min-h-screen flex items-center justify-center">読み込み中...</div>;
     if (!item) return <div className="min-h-screen flex items-center justify-center">商品が見つかりません</div>;

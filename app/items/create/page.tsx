@@ -419,6 +419,39 @@ export default function CreateListingPage() {
                                 />
                             </div>
 
+                            {/* 画像アップロード */}
+                            <div className="space-y-2">
+                                <Label className="font-bold text-slate-700">商品画像 (任意)</Label>
+                                {imagePreview ? (
+                                    <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                                        <img src={imagePreview} alt="プレビュー" className="w-full h-full object-cover" />
+                                        <button
+                                            type="button"
+                                            onClick={removeImage}
+                                            className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1.5 hover:bg-black/80 transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label
+                                        htmlFor="image-upload"
+                                        className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-violet-400 hover:bg-violet-50/50 transition-colors"
+                                    >
+                                        <Camera className="w-8 h-8 text-slate-400 mb-2" />
+                                        <span className="text-sm text-slate-500 font-medium">タップして画像を選択</span>
+                                        <span className="text-xs text-slate-400 mt-1">JPG, PNG (5MBまで)</span>
+                                        <input
+                                            id="image-upload"
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            className="hidden"
+                                            onChange={handleImageSelect}
+                                        />
+                                    </label>
+                                )}
+                            </div>
+
                         </CardContent>
                         <CardFooter className="pb-6 pt-2">
                             <Button type="submit" className="w-full font-bold text-lg h-12 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-200" disabled={loading}>
