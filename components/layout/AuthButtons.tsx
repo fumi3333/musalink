@@ -153,10 +153,15 @@ export const AuthButtons = () => {
             {/* User Menu Toggle */}
             <Button
                 variant="ghost"
-                size="icon"
-                className="text-slate-600 hover:text-violet-600"
+                size="sm"
+                className="text-slate-600 hover:text-violet-600 gap-2 px-2"
                 onClick={() => setMenuOpen(!menuOpen)}
             >
+                {/* Show Email on Desktop */}
+                <span className="hidden md:inline-block text-xs font-medium text-slate-500 max-w-[150px] truncate">
+                    {user.email}
+                </span>
+
                 <div className="relative">
                     <UserIcon className="w-5 h-5" />
                     {isVerified && (

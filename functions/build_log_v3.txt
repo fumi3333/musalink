@@ -1,0 +1,8 @@
+src/index.ts(460,9): error TS7034: Variable 'transactionId' implicitly has type 'any' in some locations where its type cannot be determined.
+src/index.ts(469,57): error TS7005: Variable 'transactionId' implicitly has an 'any' type.
+src/index.ts(607,9): error TS7034: Variable 'transactionId' implicitly has type 'any' in some locations where its type cannot be determined.
+src/index.ts(607,24): error TS7034: Variable 'reason' implicitly has type 'any' in some locations where its type cannot be determined.
+src/index.ts(618,61): error TS7005: Variable 'transactionId' implicitly has an 'any' type.
+src/index.ts(686,32): error TS7005: Variable 'reason' implicitly has an 'any' type.
+src/index.ts(718,24): error TS7034: Variable 'score' implicitly has type 'any' in some locations where its type cannot be determined.
+src/index.ts(782,66): error TS7005: Variable 'score' implicitly has an 'any' type.

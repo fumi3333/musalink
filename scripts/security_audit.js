@@ -1,12 +1,12 @@
 // CONFIG LOCAL
-// const PROJECT_ID = "musa-link";
-// const REGION = "us-central1";
-// const FUNCTION_URL = `http://127.0.0.1:5001/${PROJECT_ID}/${REGION}/unlockTransaction`;
-
-// CONFIG PRODUCTION
 const PROJECT_ID = "musa-link";
 const REGION = "us-central1";
-const FUNCTION_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/unlockTransaction`;
+const FUNCTION_URL = `http://127.0.0.1:5001/${PROJECT_ID}/${REGION}/unlockTransaction`;
+
+// CONFIG PRODUCTION
+// const PROJECT_ID = "musa-link";
+// const REGION = "us-central1";
+// const FUNCTION_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/unlockTransaction`;
 
 async function callFunction(name, data) {
     console.log(`\n[TEST] Calling ${name} with data:`, JSON.stringify(data));
@@ -19,10 +19,16 @@ async function callFunction(name, data) {
             body: JSON.stringify({ data: data }),
         });
 
-        const json = await response.json();
+        const text = await response.text();
         console.log(`[STATUS] ${response.status}`);
-        console.log(`[RESPONSE]`, JSON.stringify(json, null, 2));
-        return json;
+        try {
+            const json = JSON.parse(text);
+            console.log(`[RESPONSE]`, JSON.stringify(json, null, 2));
+            return json;
+        } catch (e) {
+            console.log(`[RESPONSE RAW] ${text}`);
+            return text;
+        }
     } catch (e) {
         console.error(`[ERROR] Request failed:`, e);
     }

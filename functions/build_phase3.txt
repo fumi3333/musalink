@@ -1,0 +1,4 @@
+src/index.ts(159,61): error TS7030: Not all code paths return a value.
+src/index.ts(467,30): error TS7030: Not all code paths return a value.
+src/index.ts(605,57): error TS7030: Not all code paths return a value.
+src/index.ts(714,48): error TS7030: Not all code paths return a value.

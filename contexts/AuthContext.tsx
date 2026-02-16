@@ -34,6 +34,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             clearTimeout(timeoutId);
             if (firebaseUser) {
+                // [Security Check] Strict Domain Enforcement (Immediate)
+                const email = firebaseUser.email || "";
+                if (!email.endsWith("@stu.musashino-u.ac.jp") && !email.endsWith("@musashino-u.ac.jp")) {
+                    console.warn(`[Auth] Blocked unauthorized domain: ${email}`);
+                    await signOut(auth);
+                    setUser(null);
+                    setUserData(null);
+                    setError("武蔵野大学のアカウント(@stu.musashino-u.ac.jp)のみ利用可能です");
+                    toast.error("武蔵野大学のアカウントのみ利用可能です", { duration: 5000 });
+                    setLoading(false);
+                    return;
+                }
+
                 setUser(firebaseUser);
 
                 // Handle Anonymous / Debug Users
@@ -162,6 +175,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
+            // Force account selection for users with multiple accounts (esp. on mobile)
+            provider.setCustomParameters({
+                prompt: 'select_account'
+            });
             await signInWithPopup(auth, provider);
             toast.success("ログインしました");
         } catch (e: any) {

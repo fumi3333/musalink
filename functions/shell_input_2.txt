@@ -1,0 +1,1 @@
+var p = createStripeAccountLink({accountId: "acct_1Sn1ToGh1ifwJu9c"}, {auth: {uid: "test"}}); p.then(r => console.log(JSON.stringify(r))).catch(e => console.error(e));

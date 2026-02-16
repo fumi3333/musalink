@@ -1,0 +1,1 @@
+createStripeAccountLink({accountId: "acct_1Sn1ToGh1ifwJu9c"}, {auth: {uid: "test"}})
