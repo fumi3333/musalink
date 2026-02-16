@@ -1,2 +1,2 @@
 
-export const SYSTEM_FEE = 100; // 100 JPY
+export const SYSTEM_FEE_RATE = 0.10; // 10% platform fee

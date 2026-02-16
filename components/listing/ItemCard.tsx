@@ -95,13 +95,13 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
                             />
                         ))}
                     </div>
-                    <span className="font-bold text-slate-700 ml-1">{item.metadata?.seller_trust_score || 4.5}</span>
-                    <span className="text-slate-400">({item.metadata?.rating_count || 12})</span>
+                    <span className="font-bold text-slate-700 ml-1">{item.metadata?.seller_trust_score ?? '-'}</span>
+                    <span className="text-slate-400">({item.metadata?.rating_count ?? 0})</span>
                 </div>
 
                 <div className="flex items-center justify-between">
                     <span className="text-lg font-bold text-slate-900">
-                        ¥{item.price.toLocaleString()}
+                        ¥{(item.price ?? 0).toLocaleString()}
                     </span>
                     {/* Visual Condition */}
                     <div className="flex flex-col items-end gap-0.5">

@@ -103,7 +103,7 @@ export default function ItemDetail({ params }: { params: Promise<{ id: string }>
 
                             <div className="flex items-center gap-4 mb-6">
                                 <span className="text-3xl font-bold text-slate-900">
-                                    ¥{item.price.toLocaleString()}
+                                    ¥{(item.price ?? 0).toLocaleString()}
                                 </span>
                                 <div className="flex items-center text-sm text-slate-500">
                                     <span className={`w-3 h-3 rounded-full mr-2 ${item.condition >= 4 ? 'bg-green-500' : 'bg-yellow-500'}`}></span>

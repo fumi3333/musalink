@@ -100,13 +100,14 @@ exports.onMessageCreated = functions.firestore
     const recipientEmail = recipient.university_email || recipient.email;
     // Rate Limit / Spam Prevention Logic?
     // Check local "Do Not Disturb"? (Skipped for MVP)
+    const msgPreview = (msg.text || '(メディア)').substring(0, 50);
     const subject = `【Musalink】新着メッセージが届きました`;
-    const text = `${recipient.display_name}様\n\n取引相手からメッセージが届きました。\n\n「${msg.text.substring(0, 50)}${msg.text.length > 50 ? '...' : ''}」\n\n返信はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${conversationId}#chat`;
+    const text = `${recipient.display_name}様\n\n取引相手からメッセージが届きました。\n\n「${msgPreview}${(msg.text || '').length > 50 ? '...' : ''}」\n\n返信はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${conversationId}#chat`;
     // 1. Create In-App Notification
     await db.collection("users").doc(recipientId).collection("notifications").add({
         type: "message_received",
         title: "新着メッセージ",
-        body: msg.text.substring(0, 30),
+        body: (msg.text || '(メディア)').substring(0, 30),
         link: `/transactions/detail?id=${conversationId}#chat`,
         createdAt: admin.firestore.Timestamp.now(),
         read: false

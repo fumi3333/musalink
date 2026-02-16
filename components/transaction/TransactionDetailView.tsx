@@ -476,7 +476,7 @@ Musalinkで連絡先を確認しました。
                                                     className="w-10 h-10 rounded-full border-yellow-400 hover:bg-yellow-100 text-yellow-500 transition-all hover:scale-110"
                                                     onClick={async () => {
                                                         const { rateUser } = await import('@/services/firestore');
-                                                        const { toast } = require('sonner');
+                                                        // toast is already imported at the top
                                                         const ratedUserId = isBuyer ? seller.id : transaction.buyer_id;
 
                                                         try {

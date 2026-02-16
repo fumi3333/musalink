@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getMyItems, getMyTransactions, getItem, getUser } from '@/services/firestore';
 import { Item, Transaction, User } from '@/types';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { ExternalLink, Star, Package, ShoppingBag, Clock, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
@@ -165,7 +166,7 @@ export default function MyPage() {
 
     const handleUpdateProfile = async () => {
         if (!userData) return;
-        const { toast } = require('sonner');
+        // toast is imported at the top
         const { updateUser } = await import('@/services/firestore');
 
         try {

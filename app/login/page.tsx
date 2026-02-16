@@ -15,7 +15,8 @@ function LoginContent() {
 
   useEffect(() => {
     if (user && !loading) {
-      if (redirectParams) {
+      // Prevent open redirect: only allow relative paths starting with /
+      if (redirectParams && redirectParams.startsWith('/') && !redirectParams.startsWith('//')) {
         router.push(redirectParams);
       } else {
         router.push("/items");

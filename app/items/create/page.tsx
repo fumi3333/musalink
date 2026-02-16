@@ -147,12 +147,25 @@ export default function CreateListingPage() {
         setLoading(true);
 
         const form = e.target as HTMLFormElement;
-        const price = parseInt((form.elements.namedItem('price') as HTMLInputElement).value);
+        const rawPrice = parseInt((form.elements.namedItem('price') as HTMLInputElement).value, 10);
+
+        if (isNaN(rawPrice) || rawPrice <= 0) {
+            toast.error("有効な価格を入力してください");
+            setLoading(false);
+            return;
+        }
+        if (rawPrice > 100000) {
+            toast.error("価格は100,000円以下にしてください");
+            setLoading(false);
+            return;
+        }
+
+        const price = rawPrice;
 
         try {
             let downloadURL = "";
-            if (imageFile) {
-                const storageRef = ref(storage, `users/${user?.uid}/items/${Date.now()}_${imageFile.name}`);
+            if (imageFile && user?.uid) {
+                const storageRef = ref(storage, `users/${user.uid}/items/${Date.now()}_${imageFile.name}`);
                 const snapshot = await uploadBytes(storageRef, imageFile);
                 downloadURL = await getDownloadURL(snapshot.ref);
             }
@@ -171,17 +184,15 @@ export default function CreateListingPage() {
                 seller_id: currentUser.id,
                 image_urls: downloadURL ? [downloadURL] : [],
                 metadata: {
-                    seller_grade: currentUser.student_id ? 'B1' : '不明',
-                    seller_department: 'Department',
-                    seller_verified: true
+                    seller_grade: currentUser.grade || '不明',
+                    seller_department: currentUser.department || currentUser.departmentId || '不明',
+                    seller_verified: !!currentUser.is_verified,
                 },
             });
-            const { toast } = require('sonner');
             toast.success("出品が完了しました！");
             router.push('/items');
         } catch (e: any) {
             console.error(e);
-            const { toast } = require('sonner');
             toast.error("出品に失敗しました: " + (e.message || "不明なエラー"));
         } finally {
             setLoading(false);

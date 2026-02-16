@@ -1,15 +1,15 @@
 export const APP_NAME = "Musalink";
 
 // 費用の設定
-// 費用の設定
-export const SYSTEM_FEE = 100; // 100 Coin (System Usage Fee)
+export const SYSTEM_FEE_RATE = 0.10; // 10% platform fee
 
 /**
- * システム利用料を返します。
- * 現在は固定で100コインです。
+ * システム手数料を計算します。
+ * 手数料 = 価格 × 10%（最低50円）
  */
 export const calculateFee = (price: number): number => {
-    return SYSTEM_FEE;
+    if (price <= 0) return 0;
+    return Math.max(Math.floor(price * SYSTEM_FEE_RATE), 50);
 };
 
 // 学内ドメイン

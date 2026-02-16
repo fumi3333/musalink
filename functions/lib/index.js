@@ -287,11 +287,9 @@ exports.cancelStaleTransactions = functions.pubsub.schedule("every 60 minutes").
         }
         // 4. Legacy Coin Refund Logic REMOVED
         batchCount++;
-        // Firestore Batch limit is 500 operations
-        if (batchCount >= 400) {
-            await batch.commit();
-            console.log("Committed batch of 400 operations.");
-            break; // MVP: Process max 400 at a time
+        // Firestore Batch limit is 500 operations (2 ops per tx: tx + item)
+        if (batchCount >= 200) {
+            break; // Cap at 200 to stay under 500 ops (200 * 2 = 400)
         }
     }
     if (batchCount > 0) {
@@ -300,7 +298,7 @@ exports.cancelStaleTransactions = functions.pubsub.schedule("every 60 minutes").
     }
     return null;
 });
-const constants_1 = require("./constants");
+// Fee calculation is handled by calculateFee from ./utils
 // ... existing code ...
 // Helper function to process unlock (shared by direct call and webhook)
 async function processUnlock(transactionId, userId, paymentIntentId, t) {
@@ -331,9 +329,10 @@ async function processUnlock(transactionId, userId, paymentIntentId, t) {
         universityEmail = privateData.university_email || privateData.email || universityEmail;
     }
     // 2. Unlock & Update Transaction
+    const feeAmount = (0, utils_1.calculateFee)(tx.price || 0);
     t.update(txRef, {
         status: 'completed',
-        fee_amount: constants_1.SYSTEM_FEE,
+        fee_amount: feeAmount,
         unlocked_assets: {
             student_id: studentId,
             university_email: universityEmail,
@@ -397,6 +396,16 @@ exports.createPaymentIntent = functions.https.onRequest(async (req, res) => {
             return;
         }
         const tx = txDoc.data();
+        // Verify caller is the buyer
+        if (tx.buyer_id !== userId) {
+            res.status(403).json({ error: "Only the buyer can create a payment intent." });
+            return;
+        }
+        // Verify transaction is in correct status
+        if (tx.status !== 'approved') {
+            res.status(400).json({ error: `Transaction must be in 'approved' status. Current: ${tx.status}` });
+            return;
+        }
         const sellerDoc = await db.collection('users').doc(tx.seller_id).get();
         if (!sellerDoc.exists) {
             res.status(404).json({ error: "Seller not found" });
@@ -408,6 +417,10 @@ exports.createPaymentIntent = functions.https.onRequest(async (req, res) => {
             return;
         }
         const itemDoc = await db.collection('items').doc(tx.item_id).get();
+        if (!itemDoc.exists) {
+            res.status(404).json({ error: "Item not found" });
+            return;
+        }
         const item = itemDoc.data();
         const amount = item.price;
         const fee = (0, utils_1.calculateFee)(amount);
@@ -790,6 +803,7 @@ exports.rateUser = functions.https.onCall(async (data, context) => {
 });
 // [New] Stripe Webhook
 exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
+    var _a;
     const sig = req.headers['stripe-signature'];
     const endpointSecret = functions.config().stripe ? functions.config().stripe.webhook_secret : "";
     let event;
@@ -806,36 +820,33 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     // Handle Connect Account Updates (capability_updated etc)
     if (event.type === 'account.updated') {
         const account = event.data.object;
-        if (account.charges_enabled) {
-            try {
-                // 1. Lookup User ID
-                const mapDoc = await db.collection('stripe_accounts').doc(account.id).get();
-                if (mapDoc.exists) {
-                    const userId = mapDoc.data().userId;
-                    // 2. Update both Public and Private profiles
-                    const userRef = db.collection('users').doc(userId);
-                    const privateProfileRef = userRef.collection('private_data').doc('profile');
-                    const batch = db.batch();
-                    batch.set(userRef, {
-                        stripe_connect_id: account.id,
-                        charges_enabled: true,
-                        updatedAt: admin.firestore.Timestamp.now()
-                    }, { merge: true });
-                    batch.set(privateProfileRef, {
-                        stripe_connect_id: account.id,
-                        charges_enabled: true,
-                        updatedAt: admin.firestore.Timestamp.now()
-                    }, { merge: true });
-                    await batch.commit();
-                    console.log(`User ${userId} charges enabled via Connect (Webhook). Updated both public & private.`);
-                }
-                else {
-                    console.warn(`Stripe ID ${account.id} not found in lookup map.`);
-                }
+        const chargesEnabled = (_a = account.charges_enabled) !== null && _a !== void 0 ? _a : false;
+        try {
+            const mapDoc = await db.collection('stripe_accounts').doc(account.id).get();
+            if (mapDoc.exists) {
+                const userId = mapDoc.data().userId;
+                const userRef = db.collection('users').doc(userId);
+                const privateProfileRef = userRef.collection('private_data').doc('profile');
+                const batch = db.batch();
+                batch.set(userRef, {
+                    stripe_connect_id: account.id,
+                    charges_enabled: chargesEnabled,
+                    updatedAt: admin.firestore.Timestamp.now()
+                }, { merge: true });
+                batch.set(privateProfileRef, {
+                    stripe_connect_id: account.id,
+                    charges_enabled: chargesEnabled,
+                    updatedAt: admin.firestore.Timestamp.now()
+                }, { merge: true });
+                await batch.commit();
+                console.log(`User ${userId} charges_enabled=${chargesEnabled} via Webhook.`);
             }
-            catch (e) {
-                console.error("Webhook Account Update Error", e);
+            else {
+                console.warn(`Stripe ID ${account.id} not found in lookup map.`);
             }
+        }
+        catch (e) {
+            console.error("Webhook Account Update Error", e);
         }
     }
     if (event.type === 'payment_intent.succeeded') {
@@ -852,12 +863,13 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
             }
             catch (e) {
                 console.error("Webhook Unlock Failed", e);
-                // Return 500 so Stripe retries
                 res.status(500).send("Unlock Failed");
                 return;
             }
         }
     }
+    // Always respond 200 to acknowledge receipt (prevents Stripe infinite retries)
+    res.status(200).json({ received: true });
 });
 // [Security] Blocking Function (Requires Identity Platform)
 // To enable: Upgrade to Blaze Plan, Enable Identity Platform, and deploy this function.
@@ -962,8 +974,26 @@ async function checkRateLimit(userId, action, limit, windowSeconds) {
         timestamp: now
     });
 }
-// [Debug] Fix Seller Status Manually
+// [Admin] Fix Seller Status Manually (requires admin auth)
 exports.fixSellerStatus = functions.https.onRequest(async (req, res) => {
+    // Admin authentication required
+    const authHeader = req.headers.authorization;
+    if (!(authHeader === null || authHeader === void 0 ? void 0 : authHeader.startsWith('Bearer '))) {
+        res.status(401).send('Unauthorized: Missing auth token');
+        return;
+    }
+    try {
+        const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+        const adminEmails = ["admin@musashino-u.ac.jp", "fumi_admin@musashino-u.ac.jp", "hrf.mtd@gmail.com"];
+        if (!adminEmails.includes(decoded.email || '')) {
+            res.status(403).send('Forbidden: Admin access only');
+            return;
+        }
+    }
+    catch (_a) {
+        res.status(401).send('Unauthorized: Invalid token');
+        return;
+    }
     const email = req.query.email;
     if (!email) {
         res.status(400).send("Missing email query param");
