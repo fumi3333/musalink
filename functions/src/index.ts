@@ -562,22 +562,34 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
             throw new functions.https.HttpsError('permission-denied', "Only the buyer can capture/confirm receipt.");
         }
 
+        // [Fix] Enhanced Demo Mode Check
+        // If tx.is_demo is missing (legacy/bug), check the Buyer's user profile.
+        let isDemo = tx.is_demo === true;
+        if (!isDemo) {
+            const buyerRef = db.collection("users").doc(tx.buyer_id);
+            const buyerDoc = await t.get(buyerRef);
+            if (buyerDoc.exists && buyerDoc.data()?.is_demo === true) {
+                isDemo = true;
+                console.log(`[Capture] Transaction ${transactionId} has no is_demo flag, but Buyer ${tx.buyer_id} is demo.`);
+            }
+        }
+
         // Check if status is payment_pending (Auth done)
         if (tx.status !== 'payment_pending') {
             // If already completed, return success (idempotency)
             if (tx.status === 'completed') return { success: true };
 
             // [Fix] Allow Demo to proceed from 'request_sent' (skipped payment)
-            const isDemoSkip = tx.is_demo === true && (tx.status === 'request_sent' || tx.status === 'approved');
+            const isDemoSkip = isDemo && (tx.status === 'request_sent' || tx.status === 'approved');
             
             if (!isDemoSkip) {
-                throw new functions.https.HttpsError('failed-precondition', "Transaction not in pending state.");
+                throw new functions.https.HttpsError('failed-precondition', `Transaction not in pending state (Current: ${tx.status}).`);
             }
         }
 
         // [Fix] Demo Mode Bypass
         // If this is a demo transaction, skip Stripe.
-        if (tx.is_demo === true) {
+        if (isDemo) {
              console.log(`[Capture] Demo Transaction ${transactionId} - Skipping Stripe Capture`);
              
              // Unlock Logic (Duplicated for Demo)
