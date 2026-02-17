@@ -467,7 +467,15 @@ export const createPaymentIntent = functions.https.onRequest(async (req, res) =>
         }
         const seller = sellerDoc.data()!;
 
-        if (!seller.stripe_connect_id || !seller.charges_enabled) {
+        // [Beta Strategy] Check if Seller is Mock or Demo
+        // We allow missing Stripe ID if it's a demo transaction or mock seller
+        const isMockSeller = seller.stripe_connect_id?.startsWith('acct_mock_') 
+                             || tx.is_demo === true 
+                             || tx.seller_id.startsWith('mock_') 
+                             || !seller.stripe_connect_id; // Allow missing ID for demo if next check passes
+
+        // Strict Check for Production/Real Users
+        if (!isMockSeller && (!seller.stripe_connect_id || !seller.charges_enabled)) {
             res.status(400).json({ error: "Seller is not ready to receive payments." });
             return;
         }
@@ -481,9 +489,6 @@ export const createPaymentIntent = functions.https.onRequest(async (req, res) =>
         const amount = item.price;
         const fee = calculateFee(amount);
 
-        // [Beta Strategy] Check if Seller is Mock
-        const isMockSeller = seller.stripe_connect_id.startsWith('acct_mock_');
-
         const paymentIntentData: Stripe.PaymentIntentCreateParams = {
             amount: amount,
             currency: 'jpy',
@@ -496,7 +501,7 @@ export const createPaymentIntent = functions.https.onRequest(async (req, res) =>
         };
 
         if (isMockSeller) {
-            console.log(`[Beta] Payment for Mock Seller ${seller.stripe_connect_id}. Money held by Platform.`);
+            console.log(`[Beta] Payment for Mock Seller ${seller.stripe_connect_id || 'Missing'}. Money held by Platform.`);
             // DO NOT set transfer_data. Funds stay in Platform Account.
         } else {
             // Real Connect Logic

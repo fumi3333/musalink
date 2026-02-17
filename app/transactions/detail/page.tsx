@@ -68,8 +68,11 @@ function TransactionDetailContent() {
                         const resData = await response.json();
                         setClientSecret(resData.clientSecret);
                     }
-                } catch (intentErr) {
+                    }
+                } catch (intentErr: any) {
                     console.error("Failed to fetch payment intent", intentErr);
+                    // Show error to help debugging (especially for "Seller has no Stripe ID" vs "Demo" issues)
+                    toast.error(`決済準備エラー: ${intentErr.message}`);
                 }
             }
 

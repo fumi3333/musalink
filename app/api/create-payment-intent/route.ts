@@ -5,7 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Cloud FunctionsのonCall関数のURL（直接POSTでonCallプロトコルに従う）
 // Cloud FunctionsのonCall関数のURL（直接POSTでonCallプロトコルに従う）
-const BASE_URL = process.env.FUNCTIONS_BASE_URL || "http://127.0.0.1:5001/musa-link/us-central1";
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "musa-link";
+const REGION = "us-central1";
+const BASE_URL = process.env.FUNCTIONS_BASE_URL || `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 const FUNCTION_URL = `${BASE_URL}/createPaymentIntent`;
 
 export async function POST(request: NextRequest) {

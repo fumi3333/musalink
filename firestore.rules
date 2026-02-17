@@ -67,7 +67,7 @@ service cloud.firestore {
       allow create: if isVerifiedStudent() 
                     && request.resource.data.buyer_id == request.auth.uid
                     && request.resource.data.status == 'request_sent'
-                    && (!('is_demo' in request.resource.data) || request.auth.token.firebase.sign_in_provider == 'anonymous')
+                    && ((!('is_demo' in request.resource.data) || request.resource.data.is_demo == false) || (request.resource.data.is_demo == true && request.auth.token.firebase.sign_in_provider == 'anonymous'))
                     && !('unlocked_assets' in request.resource.data && request.resource.data.unlocked_assets.keys().size() > 0);
       
       // Update: Buyer or Seller with Strict State Machine
