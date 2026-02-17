@@ -8,10 +8,21 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Lock, Unlock, Copy, CheckCircle, AlertTriangle, Coins, ArrowRight, UserCheck } from 'lucide-react';
 import { RevealableContent } from './RevealableContent';
-import { calculateFee } from '@/lib/constants'; // Restored
+import { calculateFee } from '@/lib/constants';
+
+function getTransactionStatusLabel(status: TransactionStatus): string {
+    switch (status) {
+        case 'request_sent': return '承認待ち';
+        case 'approved': return '支払い待ち';
+        case 'payment_pending': return '受渡待ち';
+        case 'completed': return '取引完了';
+        case 'cancelled': return 'キャンセル';
+        default: return status;
+    }
+}
 import { TransactionStepper } from './TransactionStepper';
 import { MeetingPlaceSelector } from './MeetingPlaceSelector';
-import { cn, getTransactionStatusLabel } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Elements } from '@stripe/react-stripe-js';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -20,6 +31,8 @@ import StripePaymentForm from './StripePaymentForm';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { ChatRoom } from '@/components/chat/ChatRoom';
+import { QRCodeGenerator } from './QRCodeGenerator';
+import { QRCodeScanner } from './QRCodeScanner';
 
 interface TransactionDetailViewProps {
     transaction: Transaction;
@@ -245,6 +258,14 @@ Musalinkで連絡先を確認しました。
                                     <p className="text-xs text-slate-500 mt-2">
                                         ※ここでの選択は挨拶テンプレートに反映されます（後で変更可）
                                     </p>
+                                    {/* Seller Campus Hint */}
+                                    <div className="mt-2 text-xs bg-white p-2 rounded border border-slate-100 text-slate-600">
+                                        <span className="font-bold">出品者の活動キャンパス: </span>
+                                        {seller?.campus === 'musashino' ? '武蔵野キャンパス' :
+                                         seller?.campus === 'ariake' ? '有明キャンパス' :
+                                         seller?.campus === 'both' ? '両キャンパス' :
+                                         '未設定'}
+                                    </div>
                                 </div>
 
                                 <p className="text-sm text-center text-slate-500 mb-4">
@@ -288,54 +309,142 @@ Musalinkで連絡先を確認しました。
                 </Card>
             )}
 
-            {/* --- 3. Payment Pending (Handover) --- */}
+            {/* --- 3. Payment Pending (Handover & QR Scan) --- */}
             {transaction.status === 'payment_pending' && (
-                <Card className="border-2 border-blue-200 shadow-md">
-                    <CardHeader className="bg-blue-50 border-b border-blue-100">
-                        <CardTitle className="flex items-center gap-2 text-blue-800">
-                            <Coins className="h-6 w-6" /> 商品の受け渡し
+                <Card className="border-2 border-blue-200 shadow-xl overflow-hidden">
+                    <CardHeader className="bg-blue-600 text-white border-b border-blue-500">
+                        <CardTitle className="flex items-center gap-2">
+                            <Coins className="h-6 w-6" /> 商品の受け渡し・QR認証
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="pt-6 space-y-6">
-                        <div className="text-center space-y-4">
-                            {isBuyer ? (
-                                <div className="space-y-6">
-                                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                                        <p className="text-sm text-blue-800 font-medium">
-                                            出品者と会い、商品を受け取ってください。<br />
-                                            中身を確認したら、ボタンを押して取引を完了させます。
+                    <CardContent className="pt-8 space-y-8">
+                        <div className="text-center space-y-6">
+                            
+                            {/* --- SELLER VIEW: Show QR --- */}
+                            {isSeller && (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 text-left">
+                                        <p className="text-lg font-bold text-blue-900 mb-1">
+                                            👮 出品者のアクション
+                                        </p>
+                                        <p className="text-sm text-blue-700">
+                                            購入者に会ったら、このQRコードを見せてください。<br />
+                                            購入者が読み取ると、取引が完了し売上が確定します。
                                         </p>
                                     </div>
-                                    <Button
-                                        className="w-full bg-blue-600 hover:bg-blue-700 font-bold py-8 text-lg shadow-lg shadow-blue-200 hover:scale-[1.02] transition-transform"
-                                        onClick={handleCapturePayment}
-                                    >
-                                        <CheckCircle className="mr-2 h-6 w-6" />
-                                        商品を受け取って取引を完了する
-                                    </Button>
-                                    <p className="text-xs text-slate-400">
-                                        ※ボタンを押すと支払いが確定し、出品者に送金されます。
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="space-y-6">
-                                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                                        <p className="text-sm text-blue-800 font-medium">
-                                            購入者と会い、商品を渡してください。<br />
-                                            購入者が「受取完了」ボタンを押すと取引が完了します。
-                                        </p>
-                                    </div>
-                                    <div className="p-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                                        <div className="animate-pulse flex flex-col items-center">
-                                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                                                <UserCheck className="w-8 h-8 text-blue-500" />
+                                    
+                                    <div className="flex justify-center my-8">
+                                        {/* QR Code contains Transaction ID for verification */}
+                                        <div className="relative group">
+                                            <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-violet-600 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
+                                            <div className="relative">
+                                                <QRCodeGenerator 
+                                                    value={JSON.stringify({ 
+                                                        type: 'musalink_handover', 
+                                                        txId: transaction.id,
+                                                        nonce: Date.now() // Prevent static replay if needed later
+                                                    })} 
+                                                    size={220} 
+                                                />
                                             </div>
-                                            <p className="font-bold text-slate-900">購入者の操作待ち</p>
-                                            <p className="text-xs text-slate-400 mt-2">購入者に商品を手渡し、操作を促してください。</p>
                                         </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-3">
+                                        <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
+                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                            待機中... 画面を閉じずにそのままお待ちください
+                                        </div>
+                                        {/* Fallback for Seller if Buyer can't scan */}
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="text-xs text-slate-400 hover:text-red-500">
+                                                    買い手がスキャンできない場合
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent>
+                                                <DialogHeader>
+                                                    <DialogTitle>手動完了（緊急用）</DialogTitle>
+                                                    <DialogDescription>
+                                                        カメラが壊れている等の理由でスキャンできない場合のみ使用してください。
+                                                    </DialogDescription>
+                                                </DialogHeader>
+                                                <p className="text-sm text-slate-600 mb-4">
+                                                    相手のアプリ画面で「受取完了」ボタンを押してもらってください。<br />
+                                                    ※現在、買い手側の手動ボタンは非表示設定になっています。<br />
+                                                    トラブルとして報告してください。
+                                                </p>
+                                                <Button 
+                                                    variant="secondary" 
+                                                    onClick={() => window.location.reload()}
+                                                >
+                                                    再読み込み
+                                                </Button>
+                                            </DialogContent>
+                                        </Dialog>
                                     </div>
                                 </div>
                             )}
+
+                            {/* --- BUYER VIEW: Scan QR --- */}
+                            {isBuyer && (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 text-left">
+                                        <p className="text-lg font-bold text-blue-900 mb-1">
+                                            🙋 購入者のアクション
+                                        </p>
+                                        <p className="text-sm text-blue-700">
+                                            出品者から商品を受け取り、中身を確認してください。<br />
+                                            問題なければ、相手のスマホのQRコードを読み取ってください。
+                                        </p>
+                                    </div>
+
+                                    <div className="min-h-[300px] bg-black rounded-xl overflow-hidden relative border-4 border-slate-900">
+                                        <QRCodeScanner 
+                                            onScan={(decodedText) => {
+                                                try {
+                                                    const data = JSON.parse(decodedText);
+                                                    if (data.type === 'musalink_handover' && data.txId === transaction.id) {
+                                                        handleCapturePayment();
+                                                    } else {
+                                                        toast.error("無効なQRコードです（別の取引コードの可能性があります）");
+                                                    }
+                                                } catch (e) {
+                                                    // Legacy or plain text fallback
+                                                    if (decodedText.includes(transaction.id)) {
+                                                        handleCapturePayment();
+                                                    } else {
+                                                        toast.error("QRコードの形式が正しくありません");
+                                                    }
+                                                }
+                                            }}
+                                            onError={(err) => console.log("Scan error", err)}
+                                        />
+                                        
+                                        {/* Overlay Instructions */}
+                                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent text-white text-center pointer-events-none">
+                                            <p className="font-bold text-sm">カメラを許可してスキャン</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Debug/Fallback for Buyer */}
+                                    <div className="pt-4">
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="text-xs text-slate-400"
+                                            onClick={() => {
+                                                if(confirm("【デバッグ用】カメラなしで強制完了しますか？")) {
+                                                    handleCapturePayment();
+                                                }
+                                            }}
+                                        >
+                                            [Debug] QRなしで完了 (クリック)
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
 
                         {/* Meeting Place Reminder */}
@@ -428,11 +537,18 @@ Musalinkで連絡先を確認しました。
                                                     className="w-10 h-10 rounded-full border-yellow-400 hover:bg-yellow-100 text-yellow-500 transition-all hover:scale-110"
                                                     onClick={async () => {
                                                         const { rateUser } = await import('@/services/firestore');
-                                                        // toast is already imported at the top
-                                                        const ratedUserId = isBuyer ? seller.id : transaction.buyer_id;
+                                                        
+                                                        // Smart Role Logic for Self-Trade
+                                                        let targetRole: 'buyer' | 'seller' = isBuyer ? 'buyer' : 'seller';
+                                                        if (isBuyer && isSeller) {
+                                                            if (!transaction.buyer_rated) targetRole = 'buyer';
+                                                            else if (!transaction.seller_rated) targetRole = 'seller';
+                                                        }
+
+                                                        const ratedUserId = targetRole === 'buyer' ? seller.id : transaction.buyer_id;
 
                                                         try {
-                                                            await rateUser(ratedUserId, transaction.id, isBuyer ? 'buyer' : 'seller', score);
+                                                            await rateUser(ratedUserId, transaction.id, targetRole, score);
                                                             toast.success("評価を送信しました！");
                                                             // Redirect to MyPage (Transaction Complete)
                                                             setTimeout(() => {

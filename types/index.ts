@@ -9,6 +9,7 @@ export interface User {
     department?: string; // 学部学科 (e.g., '工学部数理工学科')
     departmentId?: string; // [New] 学部コード (e.g., 'ECON_01')
     universityId?: string; // [New] 大学ID (e.g., 'musashino')
+    campus?: 'musashino' | 'ariake' | 'both'; // [New] 主な活動キャンパス
     trust_score: number;
     interests?: string[]; // [New] Zax統合用の興味タグ
     responseTimeAvg?: number; // [New] 平均返信時間（秒）
@@ -18,6 +19,7 @@ export interface User {
     stripe_connect_id?: string; // Stripe Connect Account ID (acct_...)
     charges_enabled?: boolean; // 決済有効化フラグ (KYC完了)
     is_demo?: boolean; // [Test] デモユーザー
+    isProfileComplete?: boolean; // [New] 初期設定完了フラグ
     ratings?: {
         count: number;
         total_score: number; // average = total_score / count

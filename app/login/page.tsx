@@ -84,6 +84,16 @@ function LoginContent() {
           >
               🧪 テスト用アカウントでログイン
           </Button>
+
+          <div className="my-6 p-4 bg-slate-50 rounded text-[10px] text-slate-500 leading-relaxed border border-slate-200">
+              <p className="font-bold mb-1">【重要事項・免責】</p>
+              <ul className="list-disc pl-4 space-y-1">
+                  <li>本アプリは武蔵野大学の学生有志による<strong>非公式プロジェクト</strong>です。大学とは一切関係ありません。</li>
+                  <li>ユーザー間の金銭・商品トラブルについて、運営は一切の責任を負いません。</li>
+                  <li>本番利用において、実際にクレジットカード決済を行う場合は自己責任でご利用ください。</li>
+                  <li>不適切な利用が確認された場合、予告なくアカウントを停止します。</li>
+              </ul>
+          </div>
           <div className="text-center">
             <Button
               variant="link"

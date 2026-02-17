@@ -13,10 +13,14 @@ const FORBIDDEN_PATTERNS = [
     { pattern: /pk_live_[a-zA-Z0-9]+/, name: 'Stripe Publishable Key (Live)' },
     { pattern: /rk_test_[a-zA-Z0-9]+/, name: 'Stripe Restricted Key (Test)' },
     { pattern: /rk_live_[a-zA-Z0-9]+/, name: 'Stripe Restricted Key (Live)' },
+    // Prevent accidental exposure of secrets via NEXT_PUBLIC_
+    { pattern: /NEXT_PUBLIC_.*(SECRET|PASSWORD|KEY|TOKEN).*(?!=.*PUBLISHABLE)/i, name: 'Potential Secret exposed via NEXT_PUBLIC_' },
 ];
 
 // Files to ignore (e.g. env files that are already gitignored but checking just in case, or specific config)
-// Since we are checking STAGED files, gitignored files shouldn't be here, but let's be safe.
+// Scan exclusions
+const EXCLUDED_DIRS = ['.git', 'node_modules', '.next', 'out', 'dist', 'build', 'coverage', '.gemini', 'project_context'];
+const EXCLUDED_FILES = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', '.env.example'];
 const IGNORED_FILES = [
     '.env',
     '.env.local',
@@ -40,6 +44,10 @@ try {
 
     stagedFiles.forEach(file => {
         if (IGNORED_FILES.includes(file)) return;
+        
+        // Check if file is in excluded directory
+        const isExcludedDir = EXCLUDED_DIRS.some(dir => file.startsWith(dir + '/') || file === dir);
+        if (isExcludedDir) return;
 
         try {
             const content = fs.readFileSync(file, 'utf-8');

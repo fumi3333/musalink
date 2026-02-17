@@ -1,6 +1,7 @@
 {
     "name": "functions",
     "scripts": {
+        "build": "tsc",
         "build:local": "tsc",
         "serve": "npm run build:local && firebase emulators:start --only functions",
         "shell": "npm run build:local && firebase functions:shell",

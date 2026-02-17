@@ -473,6 +473,9 @@ exports.createPaymentIntent = functions.https.onRequest(async (req, res) => {
 // [Phase 13] Capture Payment (QR Scan)
 exports.capturePayment = functions.https.onCall(async (data, context) => {
     var _a;
+    console.log("[capturePayment] INVOKED. Data:", JSON.stringify(data)); // Force Log Entry
+    // [Phase 14] Capture Payment (Payment Intent)
+    // 承認済み (approved) -> 支払い確定 (completed)
     try {
         // 1. Auth Check (Must be logged in)
         if (!context.auth) {

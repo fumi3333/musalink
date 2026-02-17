@@ -1,3 +1,5 @@
+import type { ItemCategory, TransactionStatus } from '@/types';
+
 export const APP_NAME = "Musalink";
 
 // 費用の設定
@@ -25,8 +27,6 @@ export const FUNCTIONS_BASE_URL =
 export const IS_BETA = process.env.NEXT_PUBLIC_IS_BETA === 'true';
 
 // 出品カテゴリー（教科書以外も出品可能）
-import type { ItemCategory } from '@/types';
-
 export const ITEM_CATEGORIES: { value: ItemCategory; label: string }[] = [
     { value: 'book', label: '教科書・書籍' },
     { value: 'electronics', label: '家電・デジタル' },
@@ -38,4 +38,15 @@ export const ITEM_CATEGORIES: { value: ItemCategory; label: string }[] = [
 export function getItemCategoryLabel(category: ItemCategory | undefined): string {
     if (!category) return 'その他';
     return ITEM_CATEGORIES.find(c => c.value === category)?.label ?? category;
+}
+
+export function getTransactionStatusLabel(status: TransactionStatus): string {
+    switch (status) {
+        case 'request_sent': return '承認待ち';
+        case 'approved': return '支払い待ち';
+        case 'payment_pending': return '受渡待ち'; // "Pending Payment" in system, but visually "Handover" for user
+        case 'completed': return '取引完了';
+        case 'cancelled': return 'キャンセル';
+        default: return status;
+    }
 }

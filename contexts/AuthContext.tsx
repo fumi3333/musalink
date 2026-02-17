@@ -132,6 +132,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             // Private: Ensure email is sync
                             if (finalUserData.email !== email) privateUpdates.email = email;
 
+                            // Public: Set is_verified = true (since we checked domain)
+                            if (!finalUserData.is_verified) publicUpdates.is_verified = true;
+
                             // Apply Updates
                             if (Object.keys(publicUpdates).length > 0) {
                                 await setDoc(userRef, publicUpdates, { merge: true });

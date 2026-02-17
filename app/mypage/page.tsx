@@ -13,6 +13,14 @@ import { Badge } from '@/components/ui/badge';
 import { ExternalLink, Star, Package, ShoppingBag, Clock, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { updateUser } from '@/services/firestore'; // Import updateUser
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { InterestSelector } from '@/components/profile/InterestSelector';
 
 // --- Sub Component: Listing Item ---
 const ListingItemCard = ({ item }: { item: Item }) => {
@@ -74,7 +82,7 @@ const TransactionItemCard = ({ transaction, currentUserId }: { transaction: Tran
         'request_sent': '承認待ち',
         'approved': '支払い待ち',
         'payment_pending': '受渡待ち',
-        'completed': '取引完了',
+        'completed': '取引完了 (決済済)',
         'cancelled': 'キャンセル'
     }[transaction.status] || transaction.status;
 
@@ -187,11 +195,11 @@ function MyPageContent() {
         }
     };
 
-    // Lazy Load Interest Selector to avoid huge bundle potentially? (Not really needed but good practice)
-    const { InterestSelector } = require('@/components/profile/InterestSelector');
-    const { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } = require('@/components/ui/dialog');
-    const { Input } = require('@/components/ui/input');
-    const { Label } = require('@/components/ui/label');
+    // Lazy Load removed - using top level imports
+    // const { InterestSelector } = require('@/components/profile/InterestSelector');
+    // const { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } = require('@/components/ui/dialog');
+    // const { Input } = require('@/components/ui/input');
+    // const { Label } = require('@/components/ui/label');
 
     return (
         <div className="min-h-screen bg-slate-100 pb-20">
@@ -274,9 +282,10 @@ function MyPageContent() {
             <div className="max-w-md mx-auto px-4">
 
                 <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 bg-white p-1 rounded-xl shadow-sm mb-4">
+                    <TabsList className="grid w-full grid-cols-3 bg-white p-1 rounded-xl shadow-sm mb-4">
                         <TabsTrigger value="selling" className="font-bold">出品した商品</TabsTrigger>
                         <TabsTrigger value="purchase" className="font-bold">取引 / 購入</TabsTrigger>
+                        <TabsTrigger value="settings" className="font-bold">設定</TabsTrigger>
                     </TabsList>
 
                     {/* --- Selling Tab --- */}
@@ -339,6 +348,70 @@ function MyPageContent() {
                                 )}
                             </div>
                         </div>
+                    </TabsContent>
+                    
+                    {/* --- Settings Tab --- */}
+                    <TabsContent value="settings">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>プロフィール設定</CardTitle>
+                                <CardDescription>
+                                    取引相手に表示される情報を設定します。
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div className="space-y-2">
+                                    <Label htmlFor="display_name">表示名</Label>
+                                    <Input 
+                                        id="display_name" 
+                                        value={editForm.display_name} 
+                                        placeholder="ニックネームなど"
+                                        onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
+                                    />
+                                    <p className="text-xs text-slate-500">取引チャットや商品ページに表示されます。</p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>主な活動キャンパス</Label>
+                                    <RadioGroup 
+                                        defaultValue={userData?.campus || "musashino"} 
+                                        onValueChange={(val) => {
+                                            if (userData) {
+                                                updateUser(userData.id, { campus: val as any })
+                                                    .then(() => toast.success("キャンパス設定を保存しました"))
+                                                    .catch(() => toast.error("保存に失敗しました"));
+                                            }
+                                        }}
+                                        className="flex flex-col space-y-2"
+                                    >
+                                        <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 cursor-pointer">
+                                            <RadioGroupItem value="musashino" id="camp_m" />
+                                            <Label htmlFor="camp_m" className="cursor-pointer flex-1">
+                                                <span className="font-bold block">武蔵野キャンパス</span>
+                                                <span className="text-xs text-slate-500">主に武蔵野で活動（受け渡し希望）</span>
+                                            </Label>
+                                        </div>
+                                        <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 cursor-pointer">
+                                            <RadioGroupItem value="ariake" id="camp_a" />
+                                            <Label htmlFor="camp_a" className="cursor-pointer flex-1">
+                                                <span className="font-bold block">有明キャンパス</span>
+                                                <span className="text-xs text-slate-500">主に有明で活動（受け渡し希望）</span>
+                                            </Label>
+                                        </div>
+                                        <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 cursor-pointer">
+                                            <RadioGroupItem value="both" id="camp_b" />
+                                            <Label htmlFor="camp_b" className="cursor-pointer flex-1">
+                                                <span className="font-bold block">両キャンパス</span>
+                                                <span className="text-xs text-slate-500">どちらでも対応可能</span>
+                                            </Label>
+                                        </div>
+                                    </RadioGroup>
+                                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                        ※ 取引成立後のチャットで、具体的な受け渡し場所（食堂、図書館前など）を相談してください。
+                                    </p>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                 </Tabs>
             </div>

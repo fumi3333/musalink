@@ -132,11 +132,21 @@ export default function ItemDetail({ params }: { params: Promise<{ id: string }>
                                             <span>取引 {seller.ratings?.count || 0}件</span>
                                         </div>
                                     </div>
-                                    {seller.student_id && (
+                                    {seller.is_verified && (
                                          <Badge variant="outline" className="ml-auto border-green-200 text-green-700 bg-green-50 text-[10px]">
                                              <ShieldCheck className="w-3 h-3 mr-1" />
                                              本人確認済
                                          </Badge>
+                                    )}
+                                    {/* Campus Badge */}
+                                    {seller.campus && (
+                                        <Badge variant="outline" className={`ml-2 text-[10px] ${
+                                            seller.campus === 'musashino' ? 'border-orange-200 text-orange-700 bg-orange-50' :
+                                            seller.campus === 'ariake' ? 'border-blue-200 text-blue-700 bg-blue-50' :
+                                            'border-purple-200 text-purple-700 bg-purple-50'
+                                        }`}>
+                                            {seller.campus === 'musashino' ? '武蔵野' : seller.campus === 'ariake' ? '有明' : '両キャンパス'}
+                                        </Badge>
                                     )}
                                 </div>
                             )}
