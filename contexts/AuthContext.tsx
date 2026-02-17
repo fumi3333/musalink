@@ -34,22 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             clearTimeout(timeoutId);
             if (firebaseUser) {
-                // [Security Check] Strict Domain Enforcement (Immediate)
-                const email = firebaseUser.email || "";
-                if (!email.endsWith("@stu.musashino-u.ac.jp") && !email.endsWith("@musashino-u.ac.jp")) {
-                    console.warn(`[Auth] Blocked unauthorized domain: ${email}`);
-                    await signOut(auth);
-                    setUser(null);
-                    setUserData(null);
-                    setError("武蔵野大学のアカウント(@stu.musashino-u.ac.jp)のみ利用可能です");
-                    toast.error("武蔵野大学のアカウントのみ利用可能です", { duration: 5000 });
-                    setLoading(false);
-                    return;
-                }
-
-                setUser(firebaseUser);
-
-                // Handle Anonymous / Debug Users
+                // [Debug/Guest Handling] Check FIRST before domain enforcement
                 if (firebaseUser.isAnonymous) {
                      console.log("Debug/Guest Login Active");
                      setUser(firebaseUser);
@@ -67,8 +52,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                      });
                      setLoading(false);
                      return;
-                } else {
-                    // Real Google Users
+                }
+
+                // [Security Check] Strict Domain Enforcement
+                const email = firebaseUser.email || "";
+                if (!email.endsWith("@stu.musashino-u.ac.jp") && !email.endsWith("@musashino-u.ac.jp")) {
+                    console.warn(`[Auth] Blocked unauthorized domain: ${email}`);
+                    await signOut(auth);
+                    setUser(null);
+                    setUserData(null);
+                    setError("武蔵野大学のアカウント(@stu.musashino-u.ac.jp)のみ利用可能です");
+                    toast.error("武蔵野大学のアカウントのみ利用可能です", { duration: 5000 });
+                    setLoading(false);
+                    return;
+                }
+
+                setUser(firebaseUser);
+                
+                // Real Google Users logic starts here
+                try {
                     try {
                         const userRef = doc(db, "users", firebaseUser.uid);
                         const privateRef = doc(db, "users", firebaseUser.uid, "private_data", "profile");

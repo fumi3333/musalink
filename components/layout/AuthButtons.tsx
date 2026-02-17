@@ -72,12 +72,16 @@ export const AuthButtons = () => {
                                 <div className="text-sm text-muted-foreground">
                                     {error}
                                     <br /><br />
-                                    <span className="font-bold text-slate-700">解決手順:</span>
-                                    <ol className="list-decimal list-inside mt-2 text-xs space-y-1">
-                                        <li>Firebase Consoleを開く</li>
-                                        <li>認証 &gt; サインイン方法を選択</li>
-                                        <li>Googleプロバイダを「有効」にする</li>
-                                    </ol>
+                                    {(error && error.includes("設定")) && (
+                                        <>
+                                            <span className="font-bold text-slate-700">解決手順:</span>
+                                            <ol className="list-decimal list-inside mt-2 text-xs space-y-1">
+                                                <li>Firebase Consoleを開く</li>
+                                                <li>認証 &gt; サインイン方法を選択</li>
+                                                <li>Googleプロバイダを「有効」にする</li>
+                                            </ol>
+                                        </>
+                                    )}
                                 </div>
                             </DialogDescription>
                         </DialogHeader>
