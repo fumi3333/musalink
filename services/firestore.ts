@@ -43,22 +43,7 @@ export const rateUser = async (targetUserId: string, transactionId: string, role
 
 // Mock Data for Fallback - Status corrected to 'listing'
 const MOCK_ITEMS: Item[] = [
-    {
-        id: 'mock_item_1',
-        title: 'Mock Textbook A',
-        price: 1500,
-        seller_id: 'mock-user-s2527084',
-        status: 'listing',
-        condition: 4,
-        description: 'Previously used for Engineering Math.',
-        createdAt: new Date(),
-        image_urls: [],
-        metadata: {
-            seller_grade: 'B2',
-            seller_department: 'Engineering',
-            seller_verified: true
-        }
-    },
+
     {
         id: 'mock_item_2',
         title: 'Mock Textbook B',

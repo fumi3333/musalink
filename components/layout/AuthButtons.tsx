@@ -202,6 +202,15 @@ export const AuthButtons = () => {
                             </Link>
 
                             <Link
+                                href="/mypage?tab=selling"
+                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
+                                onClick={() => setMenuOpen(false)}
+                            >
+                                <span className="text-lg">🏷️</span>
+                                出品した商品
+                            </Link>
+
+                            <Link
                                 href="/mypage?tab=purchase"
                                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
                                 onClick={() => setMenuOpen(false)}

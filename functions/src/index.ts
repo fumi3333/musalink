@@ -678,7 +678,8 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
     } catch (error: any) {
         console.error("[capturePayment] FATAL ERROR", error);
         if (error instanceof functions.https.HttpsError) throw error;
-        throw new functions.https.HttpsError('internal', `Server Crash: ${error.message || 'Unknown'}`);
+        // Use 'aborted' to ensure the message is visible to the client (internal is masked in prod)
+        throw new functions.https.HttpsError('aborted', `Server Crash: ${error.message || 'Unknown Error'} (Stack: ${error.stack?.substring(0, 100)})`);
     }
 });
 
@@ -756,7 +757,6 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
     }
 });
 
-
 // [New] Cancel Transaction & Refund/Release
 export const cancelTransaction = functions.https.onCall(async (data, context) => {
     // 1. Auth Check
@@ -764,6 +764,7 @@ export const cancelTransaction = functions.https.onCall(async (data, context) =>
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
     }
     const callerId = context.auth.uid;
+    console.log(`[cancelTransaction] Caller: ${callerId}`);
     let transactionId: string;
     let reason: string | undefined;
     try {

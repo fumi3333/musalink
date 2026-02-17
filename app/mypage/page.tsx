@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -112,6 +112,12 @@ const TransactionItemCard = ({ transaction, currentUserId }: { transaction: Tran
 export default function MyPage() {
     const { userData, loading: authLoading } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const currentTab = searchParams.get('tab') || 'selling';
+
+    const handleTabChange = (value: string) => {
+        router.push(`/mypage?tab=${value}`);
+    };
 
     const [myItems, setMyItems] = useState<Item[]>([]);
     const [myTransactions, setMyTransactions] = useState<Transaction[]>([]);
@@ -267,7 +273,7 @@ export default function MyPage() {
             {/* --- Main Content --- */}
             <div className="max-w-md mx-auto px-4">
 
-                <Tabs defaultValue={new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab') || "selling"} className="w-full">
+                <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
                     <TabsList className="grid w-full grid-cols-2 bg-white p-1 rounded-xl shadow-sm mb-4">
                         <TabsTrigger value="selling" className="font-bold">出品した商品</TabsTrigger>
                         <TabsTrigger value="purchase" className="font-bold">取引 / 購入</TabsTrigger>
