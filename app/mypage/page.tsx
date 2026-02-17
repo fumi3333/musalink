@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useState, Suspense } from 'react'; // Added Suspense
 import { useAuth } from '@/contexts/AuthContext';
 // ... imports
