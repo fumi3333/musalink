@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     } catch (e: any) {
                         console.warn("Fetch user data error:", e);
                     }
-                }
+
             } else {
                 setUser(null);
                 setUserData(null);
