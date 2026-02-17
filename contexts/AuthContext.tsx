@@ -71,7 +71,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 
                 // Real Google Users logic starts here
                 try {
-                    try {
                         const userRef = doc(db, "users", firebaseUser.uid);
                         const privateRef = doc(db, "users", firebaseUser.uid, "private_data", "profile");
 
