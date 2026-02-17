@@ -54,17 +54,12 @@ export const AuthButtons = () => {
                     {isLoggingIn ? "ログイン中..." : "ログイン"}
                 </Button>
 
-                {/* TEST MODE ACCOUNTS — development only */}
-                {process.env.NODE_ENV === 'development' && (
-                    <div className="flex flex-col gap-1">
-                        <Button onClick={() => debugLogin('seller')} variant="outline" size="sm" className="text-[10px] h-6 px-2 text-slate-500 border-dashed border-slate-300 hover:bg-violet-50 hover:text-violet-600 hover:border-violet-300 transition-all">
-                            🟢 売り手で試す
-                        </Button>
-                        <Button onClick={() => debugLogin('buyer')} variant="outline" size="sm" className="text-[10px] h-6 px-2 text-slate-500 border-dashed border-slate-300 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all">
-                            🔵 買い手で試す
-                        </Button>
-                    </div>
-                )}
+                {/* TEST MODE ACCOUNTS — Enabled for Verification */}
+                <div className="flex flex-col gap-1">
+                    <Button onClick={() => debugLogin('buyer')} variant="outline" size="sm" className="text-[10px] h-6 px-2 text-slate-500 border-dashed border-slate-300 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all">
+                        🔵 テスト用アカウントでログイン
+                    </Button>
+                </div>
 
                 <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
                     <DialogContent className="sm:max-w-[425px]">
