@@ -563,16 +563,30 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
         }
 
         // [Fix] Enhanced Demo Mode Check
-        // If tx.is_demo is missing (legacy/bug), check the Buyer's user profile.
+        // Priority:
+        // 1. tx.is_demo (Explicit flag on transaction)
+        // 2. Buyer Profile is_demo (User profile)
+        // 3. Auth Token is Anonymous (Context)
         let isDemo = tx.is_demo === true;
+        
         if (!isDemo) {
+            // Check Profile
             const buyerRef = db.collection("users").doc(tx.buyer_id);
             const buyerDoc = await t.get(buyerRef);
             if (buyerDoc.exists && buyerDoc.data()?.is_demo === true) {
                 isDemo = true;
-                console.log(`[Capture] Transaction ${transactionId} has no is_demo flag, but Buyer ${tx.buyer_id} is demo.`);
+                console.log(`[Capture] Demo detected via User Profile for ${tx.buyer_id}`);
+            }
+
+            // Check Auth Context (Anonymous)
+            // context.auth is already verified above
+            if (!isDemo && context.auth?.token?.firebase?.sign_in_provider === 'anonymous') {
+                isDemo = true;
+                console.log(`[Capture] Demo detected via Anonymous Auth for ${callerId}`);
             }
         }
+
+        console.log(`[Capture] Transaction ${transactionId} - isDemo result: ${isDemo}`);
 
         // Check if status is payment_pending (Auth done)
         if (tx.status !== 'payment_pending') {
@@ -583,7 +597,8 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
             const isDemoSkip = isDemo && (tx.status === 'request_sent' || tx.status === 'approved');
             
             if (!isDemoSkip) {
-                throw new functions.https.HttpsError('failed-precondition', `Transaction not in pending state (Current: ${tx.status}).`);
+                // Return a clear error message
+                throw new functions.https.HttpsError('failed-precondition', `[Server] Status Error: Transaction is ${tx.status}, expected payment_pending.`);
             }
         }
 
