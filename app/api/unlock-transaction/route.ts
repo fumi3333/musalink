@@ -3,7 +3,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Cloud FunctionsのonCall関数のURL
-const FUNCTION_URL = "https://us-central1-musa-link.cloudfunctions.net/unlockTransaction";
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "musa-link";
+const REGION = "us-central1";
+const BASE_URL = process.env.FUNCTIONS_BASE_URL || `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
+const FUNCTION_URL = `${BASE_URL}/unlockTransaction`;
 
 export async function POST(request: NextRequest) {
     try {

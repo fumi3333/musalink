@@ -564,7 +564,13 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
         if (tx.status !== 'payment_pending') {
             // If already completed, return success (idempotency)
             if (tx.status === 'completed') return { success: true };
-            throw new functions.https.HttpsError('failed-precondition', "Transaction not in pending state.");
+
+            // [Fix] Allow Demo to proceed from 'request_sent' (skipped payment)
+            const isDemoSkip = tx.is_demo === true && (tx.status === 'request_sent' || tx.status === 'approved');
+            
+            if (!isDemoSkip) {
+                throw new functions.https.HttpsError('failed-precondition', "Transaction not in pending state.");
+            }
         }
 
         // [Fix] Demo Mode Bypass
