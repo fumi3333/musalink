@@ -367,17 +367,20 @@ Musalinkで連絡先を確認しました。
                                                         カメラを起動して読み取る
                                                     </span>
                                                 </Button>
-                                                {/* Demo Fallback */}
-                                                <div className="text-center pt-2">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="text-xs text-slate-400 hover:text-slate-600"
-                                                        onClick={handleCapturePayment}
-                                                    >
-                                                        【デモ用】カメラが使えない場合（スキップして完了）
-                                                    </Button>
+                                                
+                                                <div className="relative flex py-2 items-center">
+                                                    <div className="flex-grow border-t border-slate-200"></div>
+                                                    <span className="flex-shrink-0 mx-4 text-slate-400 text-xs">または</span>
+                                                    <div className="flex-grow border-t border-slate-200"></div>
                                                 </div>
+
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full py-4 text-slate-600 hover:bg-slate-100 border-slate-300"
+                                                    onClick={handleCapturePayment}
+                                                >
+                                                    QRコードを読み取らずに取引完了
+                                                </Button>
                                             </div>
                                         ) : (
                                             <div className="space-y-4">

@@ -22,11 +22,21 @@ export const HeroSection = () => {
                     キャンパスで、<br className="md:hidden" />次の誰かへ。
                 </h1>
 
-                <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
                     Musalinkは、先輩から後輩へ、教科書やアイテムを
                     <br className="hidden md:block" />
                     安全に継承するための学内限定フリマアプリです。
                 </p>
+
+                <div className="mb-10 p-4 bg-white/5 rounded-lg border border-white/10 backdrop-blur-sm inline-block max-w-xl">
+                    <p className="text-sm text-slate-300 flex items-center justify-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span className="font-bold text-white">安心・安全への取り組み</span>
+                    </p>
+                    <p className="text-xs text-slate-400 mt-2">
+                        武蔵野大学のメールアドレス（@stu.musashino-u.ac.jpなど）をお持ちの方のみが登録・利用できるため、
+                        学外の不審なユーザーは存在しません。安心してご利用ください。
+                    </p>
+                </div>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                     <Button asChild size="lg" className="relative z-20 w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white font-bold px-8 py-6 text-lg shadow-lg hover:translate-y-[-2px] transition-all">
