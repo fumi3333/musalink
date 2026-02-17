@@ -562,6 +562,40 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
             throw new functions.https.HttpsError('failed-precondition', "Transaction not in pending state.");
         }
 
+        // [Fix] Demo Mode Bypass
+        // If this is a demo transaction, skip Stripe.
+        if (tx.is_demo === true) {
+             console.log(`[Capture] Demo Transaction ${transactionId} - Skipping Stripe Capture`);
+             
+             // Unlock Logic (Duplicated for Demo)
+             const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
+             const sellerPrivateDoc = await t.get(sellerPrivateRef);
+             let studentId = "private";
+             let universityEmail = "private";
+
+             if (sellerPrivateDoc.exists) {
+                 const privateData = sellerPrivateDoc.data()!;
+                 studentId = privateData.student_id || privateData.email || studentId;
+                 universityEmail = privateData.university_email || privateData.email || universityEmail;
+             } else {
+                 // Fallback for mock sellers
+                 studentId = "s9999999";
+                 universityEmail = "demo@musashino-u.ac.jp";
+             }
+
+             t.update(txRef, {
+                 status: 'completed',
+                 unlocked_assets: {
+                     student_id: studentId,
+                     university_email: universityEmail,
+                     unlockedAt: admin.firestore.Timestamp.now()
+                 },
+                 updatedAt: admin.firestore.Timestamp.now()
+             });
+
+             return { success: true };
+        }
+
         const paymentIntentId = tx.payment_intent_id;
         if (!paymentIntentId) throw new functions.https.HttpsError('failed-precondition', "No payment link found.");
 
