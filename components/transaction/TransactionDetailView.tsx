@@ -367,7 +367,17 @@ Musalinkで連絡先を確認しました。
                                                         カメラを起動して読み取る
                                                     </span>
                                                 </Button>
-                                                {/* Demo fallback removed */}
+                                                {/* Demo Fallback */}
+                                                <div className="text-center pt-2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-xs text-slate-400 hover:text-slate-600"
+                                                        onClick={handleCapturePayment}
+                                                    >
+                                                        【デモ用】カメラが使えない場合（スキップして完了）
+                                                    </Button>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="space-y-4">
