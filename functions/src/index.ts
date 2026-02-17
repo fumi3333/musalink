@@ -538,12 +538,14 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
     }
     const callerId = context.auth.uid;
+    console.log(`[capturePayment] Request by ${callerId} for data:`, data);
 
     let transactionId: string;
     try {
         const params = CapturePaymentSchema.parse(data);
         transactionId = params.transactionId;
     } catch (e: any) {
+        console.error(`[capturePayment] Validation Error:`, e);
         throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters', e.errors);
     }
 

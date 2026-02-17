@@ -92,20 +92,35 @@ Musalinkで連絡先を確認しました。
     const handleCapturePayment = async () => {
         const { toast } = await import('sonner');
 
-        // Demo bypass removed for production security.
-        // const isDemo = ...
+        if (!transaction || !transaction.id) {
+            toast.error("取引IDが見つかりません");
+            return;
+        }
 
         const { httpsCallable } = await import('firebase/functions');
         const { functions } = await import('@/lib/firebase');
 
         toast.info("受取確認処理中...", { duration: 5000 });
         try {
+            console.log("Capturing payment for transaction:", transaction.id);
             const captureFn = httpsCallable(functions, 'capturePayment');
-            await captureFn({ transactionId: transaction.id });
+            const result = await captureFn({ transactionId: transaction.id });
+            console.log("Capture result:", result);
             toast.success("受取完了！支払いを確定しました");
-            window.location.reload();
+            
+            // Wait a bit for Firestore sync, then reload
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
         } catch (e: any) {
-            toast.error("通信エラーが発生しました (" + e.message + ")");
+            console.error("Capture Error Detailed:", e);
+            // Show more details if available
+            const errorMsg = e.message || "不明な通信エラー";
+            const errorCode = e.code || "no-code";
+            toast.error(`通信エラーが発生しました (${errorCode}: ${errorMsg})`, {
+                duration: 10000,
+                description: "この画面をスクリーンショットして開発者に送ってください。"
+            });
         }
     };
 
