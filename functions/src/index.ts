@@ -533,6 +533,7 @@ export const createPaymentIntent = functions.https.onRequest(async (req, res) =>
 
 // [Phase 13] Capture Payment (QR Scan)
 export const capturePayment = functions.https.onCall(async (data, context) => {
+    try {
     // 1. Auth Check (Must be logged in)
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
@@ -549,116 +550,75 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters', e.errors);
     }
 
-    return db.runTransaction(async (t) => {
-        const txRef = db.collection("transactions").doc(transactionId);
-        const txDoc = await t.get(txRef);
+        return await db.runTransaction(async (t) => {
+            const txRef = db.collection("transactions").doc(transactionId);
+            const txDoc = await t.get(txRef);
 
-        if (!txDoc.exists) throw new functions.https.HttpsError('not-found', "Transaction not found");
-        const tx = txDoc.data()!;
+            if (!txDoc.exists) {
+                console.error("[capturePayment] Transaction not found", transactionId);
+                throw new functions.https.HttpsError('not-found', "Transaction not found");
+            }
+            const tx = txDoc.data()!;
 
-        // 2. Authorization Check (Buyer Only - Inverted Flow)
-        // The Buyer scans the Seller's QR to confirm receipt and trigger the payment capture.
-        if (tx.buyer_id !== callerId) {
-            throw new functions.https.HttpsError('permission-denied', "Only the buyer can capture/confirm receipt.");
-        }
-
-        // [Fix] Enhanced Demo Mode Check
-        // Priority:
-        // 1. tx.is_demo (Explicit flag on transaction)
-        // 2. Buyer Profile is_demo (User profile)
-        // 3. Auth Token is Anonymous (Context)
-        let isDemo = tx.is_demo === true;
-        
-        if (!isDemo) {
-            // Check Profile
-            const buyerRef = db.collection("users").doc(tx.buyer_id);
-            const buyerDoc = await t.get(buyerRef);
-            if (buyerDoc.exists && buyerDoc.data()?.is_demo === true) {
-                isDemo = true;
-                console.log(`[Capture] Demo detected via User Profile for ${tx.buyer_id}`);
+            // 2. Authorization Check
+            if (tx.buyer_id !== callerId) {
+                console.error(`[capturePayment] Permission Denied: Caller ${callerId} !== Buyer ${tx.buyer_id}`);
+                throw new functions.https.HttpsError('permission-denied', "Only the buyer can capture/confirm receipt.");
             }
 
-            // Check Auth Context (Anonymous)
-            // context.auth is already verified above
-            if (!isDemo && context.auth?.token?.firebase?.sign_in_provider === 'anonymous') {
-                isDemo = true;
-                console.log(`[Capture] Demo detected via Anonymous Auth for ${callerId}`);
+            // 3. Demo Detection (Ultra Robust)
+            let isDemo = tx.is_demo === true;
+            if (!isDemo) {
+                try {
+                    // Method A: Check User Profile
+                    const buyerRef = db.collection("users").doc(tx.buyer_id);
+                    const buyerDoc = await t.get(buyerRef);
+                    if (buyerDoc.exists && buyerDoc.data()?.is_demo === true) {
+                        isDemo = true; 
+                        console.log("[capturePayment] Detected Demo via Profile");
+                    }
+                    // Method B: Check Auth Token
+                    else if (context.auth?.token?.firebase?.sign_in_provider === 'anonymous') {
+                        isDemo = true;
+                        console.log("[capturePayment] Detected Demo via Anonymous Auth");
+                    }
+                } catch (demoCheckErr) {
+                    console.warn("[capturePayment] Demo check warning:", demoCheckErr);
+                }
             }
-        }
 
-        console.log(`[Capture] Transaction ${transactionId} - isDemo result: ${isDemo}`);
-
-        // Check if status is payment_pending (Auth done)
-        if (tx.status !== 'payment_pending') {
-            // If already completed, return success (idempotency)
-            if (tx.status === 'completed') return { success: true };
-
-            // [Fix] Allow Demo to proceed from 'request_sent' (skipped payment)
-            const isDemoSkip = isDemo && (tx.status === 'request_sent' || tx.status === 'approved');
-            
-            if (!isDemoSkip) {
-                // Return a clear error message
-                throw new functions.https.HttpsError('failed-precondition', `[Server] Status Error: Transaction is ${tx.status}, expected payment_pending.`);
+            // 4. Status Check
+            if (tx.status !== 'payment_pending') {
+                // Idempotency
+                if (tx.status === 'completed') return { success: true };
+                
+                // Allow "Request Sent" (Skip Payment) ONLY for Demo
+                const isDemoSkip = isDemo && (tx.status === 'request_sent' || tx.status === 'approved');
+                if (!isDemoSkip) {
+                    console.error(`[capturePayment] Invalid Status: ${tx.status}`);
+                    throw new functions.https.HttpsError('failed-precondition', `Status Error: ${tx.status} (Not pending)`);
+                }
             }
-        }
 
-        // [Fix] Demo Mode Bypass
-        // If this is a demo transaction, skip Stripe.
-        if (isDemo) {
-             console.log(`[Capture] Demo Transaction ${transactionId} - Skipping Stripe Capture`);
-             
-             // Unlock Logic (Duplicated for Demo)
-             const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
-             const sellerPrivateDoc = await t.get(sellerPrivateRef);
-             let studentId = "private";
-             let universityEmail = "private";
-
-             if (sellerPrivateDoc.exists) {
-                 const privateData = sellerPrivateDoc.data()!;
-                 studentId = privateData.student_id || privateData.email || studentId;
-                 universityEmail = privateData.university_email || privateData.email || universityEmail;
-             } else {
-                 // Fallback for mock sellers
-                 studentId = "s9999999";
-                 universityEmail = "demo@musashino-u.ac.jp";
-             }
-
-             t.update(txRef, {
-                 status: 'completed',
-                 unlocked_assets: {
-                     student_id: studentId,
-                     university_email: universityEmail,
-                     unlockedAt: admin.firestore.Timestamp.now()
-                 },
-                 updatedAt: admin.firestore.Timestamp.now()
-             });
-
-             return { success: true };
-        }
-
-        const paymentIntentId = tx.payment_intent_id;
-        if (!paymentIntentId) throw new functions.https.HttpsError('failed-precondition', "No payment link found.");
-
-        try {
-            // CAPTURE
-            // Use tx.buyer_id + timestamp logic isn't perfect for idempotency if retrying same request.
-            // Best is to use transaction ID. capture is 1-to-1 with paymentintent usually.
-            const idempotencyKey = `pi_capture_${transactionId}`;
-            
-            const capturedInfo = await stripe.paymentIntents.capture(paymentIntentId, {}, {
-                idempotencyKey
-            });
-
-            if (capturedInfo.status === 'succeeded') {
-                // Update Transaction（個人情報は private_data のみから取得）
-                const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
-                const sellerPrivateDoc = await t.get(sellerPrivateRef);
-                let studentId = "private";
-                let universityEmail = "private";
-                if (sellerPrivateDoc.exists) {
-                    const privateData = sellerPrivateDoc.data()!;
-                    studentId = privateData.student_id || privateData.email || studentId;
-                    universityEmail = privateData.university_email || privateData.email || universityEmail;
+            // 5. Execution
+            if (isDemo) {
+                console.log(`[capturePayment] Executing DEMO completion for ${transactionId}`);
+                
+                // Demo: Mock Unlock
+                let studentId = "s9999999";
+                let universityEmail = "demo@musashino-u.ac.jp";
+                
+                // Try to get real seller info if possible (safe failover)
+                try {
+                    const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
+                    const sellerPrivateDoc = await t.get(sellerPrivateRef);
+                    if (sellerPrivateDoc.exists) {
+                        const pd = sellerPrivateDoc.data()!;
+                        studentId = pd.student_id || studentId;
+                        universityEmail = pd.university_email || universityEmail;
+                    }
+                } catch (e) {
+                    console.warn("[capturePayment] Failed to fetch seller private data (ignoring for demo)", e);
                 }
 
                 t.update(txRef, {
@@ -671,16 +631,55 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
                     updatedAt: admin.firestore.Timestamp.now()
                 });
 
-                return { success: true };
+                return { success: true, mode: 'demo' };
+                
             } else {
-                throw new Error("Capture failed status: " + capturedInfo.status);
+                // Real Stripe Capture
+                if (!tx.payment_intent_id) {
+                    throw new functions.https.HttpsError('failed-precondition', "No payment intent found.");
+                }
+                
+                try {
+                    await stripe.paymentIntents.capture(tx.payment_intent_id);
+                } catch (stripeErr: any) {
+                    console.error("[capturePayment] Stripe Capture Failed", stripeErr);
+                    if (stripeErr.code !== 'payment_intent_unexpected_state') {
+                         throw new functions.https.HttpsError('aborted', `Stripe Error: ${stripeErr.message}`);
+                    }
+                }
+
+                // Unlock Logic (Real)
+                const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
+                const sellerPrivateDoc = await t.get(sellerPrivateRef);
+                
+                let studentId = "unknown";
+                let universityEmail = "unknown";
+                if (sellerPrivateDoc.exists) {
+                    const pd = sellerPrivateDoc.data()!;
+                    studentId = pd.student_id;
+                    universityEmail = pd.university_email;
+                }
+
+                t.update(txRef, {
+                    status: 'completed',
+                    unlocked_assets: {
+                        student_id: studentId,
+                        university_email: universityEmail,
+                        unlockedAt: admin.firestore.Timestamp.now()
+                    },
+                    updatedAt: admin.firestore.Timestamp.now()
+                });
+                
+                return { success: true, mode: 'live' };
             }
-        } catch (e: any) {
-            // Use handleCallableError, but inside transaction we might need to re-throw specific way?
-            // Actually handleCallableError throws HttpsError, which aborts transaction properly.
-            return handleCallableError(e, "capturePayment");
-        }
+
+
     });
+    } catch (error: any) {
+        console.error("[capturePayment] FATAL ERROR", error);
+        if (error instanceof functions.https.HttpsError) throw error;
+        throw new functions.https.HttpsError('internal', `Server Crash: ${error.message || 'Unknown'}`);
+    }
 });
 
 // [Phase 14] Unlock Transaction (Fallback / Manual)
