@@ -37,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 // [Debug/Guest Handling] Check FIRST before domain enforcement
                 if (firebaseUser.isAnonymous) {
                      console.log("Debug/Guest Login Active");
+                     setError(null);
                      setUser(firebaseUser);
                      setUserData({
                          id: firebaseUser.uid,
@@ -231,6 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const debugLogin = async (role: 'seller' | 'buyer' = 'seller') => {
+        setError(null);
         try {
             const { signInAnonymously } = await import('firebase/auth');
             await signInAnonymously(auth);
