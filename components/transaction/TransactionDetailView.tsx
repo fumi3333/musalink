@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import QRCode from 'react-qr-code';
 import { Item, Transaction, TransactionStatus, User } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -86,58 +85,8 @@ Musalinkで連絡先を確認しました。
         setMeetingPlace(val);
     };
 
-    // [Step 9678] QR Scanner Logic
-    const [isScanning, setIsScanning] = useState(false);
+    // [Step 9678] QR Scanner logic removed
 
-    React.useEffect(() => {
-        if (!isScanning) return;
-
-        let scanner: any = null;
-
-        const initScanner = async () => {
-            try {
-                const { Html5QrcodeScanner } = await import('html5-qrcode');
-
-                // Initialize scanner (targetId: "reader")
-                scanner = new Html5QrcodeScanner(
-                    "reader",
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    /* verbose= */ false
-                );
-
-                scanner.render(async (decodedText: string) => {
-                    // Validate ID
-                    if (decodedText === transaction.id) {
-                        scanner.clear();
-                        setIsScanning(false);
-                        toast.success("QRコードを読み取りました！");
-
-                        // Execute Capture Payment Flow
-                        await handleCapturePayment();
-                    } else {
-                        // Wrong QR Code
-                        toast.error("無効なQRコードです（取引IDが一致しません）");
-                    }
-                }, (error: any) => {
-                    // Ignored scan error
-                });
-            } catch (e) {
-                console.error("Scanner Init Error", e);
-                toast.error("カメラの起動に失敗しました");
-                setIsScanning(false);
-            }
-        };
-
-        // Small timeout to ensure DOM is ready
-        const timer = setTimeout(initScanner, 100);
-
-        return () => {
-            clearTimeout(timer);
-            if (scanner) {
-                scanner.clear().catch((err: any) => console.error("Failed to clear scanner", err));
-            }
-        };
-    }, [isScanning, transaction.id]);
 
     // Extracted Capture Logic
     const handleCapturePayment = async () => {
@@ -324,85 +273,60 @@ Musalinkで連絡先を確認しました。
                 </Card>
             )}
 
-            {/* --- 3. Payment Pending (QR Handover) --- */}
+            {/* --- 3. Payment Pending (Handover) --- */}
             {transaction.status === 'payment_pending' && (
                 <Card className="border-2 border-blue-200 shadow-md">
                     <CardHeader className="bg-blue-50 border-b border-blue-100">
                         <CardTitle className="flex items-center gap-2 text-blue-800">
-                            <Coins className="h-6 w-6" /> 受け渡しを行ってください
+                            <Coins className="h-6 w-6" /> 商品の受け渡し
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-6 space-y-6">
-
                         <div className="text-center space-y-4">
-                            <div className="bg-white p-6 rounded-xl border-2 border-dashed border-blue-300 inline-block w-full max-w-sm">
-
-                                {/* Hybrid Logic: If Self-Trade (Buyer & Seller), show BOTH sections stack */}
-
-                                {(isSeller || (isBuyer && isSeller)) && (
-                                    <div className="space-y-4 mb-8 border-b border-slate-100 pb-8">
-                                        <p className="text-sm font-bold text-slate-500">【売り手】このQRコードを買い手に提示してください</p>
-                                        <div className="bg-white p-4 mx-auto inline-block rounded-lg shadow-inner border border-slate-200">
-                                            <QRCode value={transaction.id} size={160} />
+                            {isBuyer ? (
+                                <div className="space-y-6">
+                                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                        <p className="text-sm text-blue-800 font-medium">
+                                            出品者と会い、商品を受け取ってください。<br />
+                                            中身を確認したら、ボタンを押して取引を完了させます。
+                                        </p>
+                                    </div>
+                                    <Button
+                                        className="w-full bg-blue-600 hover:bg-blue-700 font-bold py-8 text-lg shadow-lg shadow-blue-200 hover:scale-[1.02] transition-transform"
+                                        onClick={handleCapturePayment}
+                                    >
+                                        <CheckCircle className="mr-2 h-6 w-6" />
+                                        商品を受け取って取引を完了する
+                                    </Button>
+                                    <p className="text-xs text-slate-400">
+                                        ※ボタンを押すと支払いが確定し、出品者に送金されます。
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                        <p className="text-sm text-blue-800 font-medium">
+                                            購入者と会い、商品を渡してください。<br />
+                                            購入者が「受取完了」ボタンを押すと取引が完了します。
+                                        </p>
+                                    </div>
+                                    <div className="p-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                                        <div className="animate-pulse flex flex-col items-center">
+                                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                                                <UserCheck className="w-8 h-8 text-blue-500" />
+                                            </div>
+                                            <p className="font-bold text-slate-900">購入者の操作待ち</p>
+                                            <p className="text-xs text-slate-400 mt-2">購入者に商品を手渡し、操作を促してください。</p>
                                         </div>
-                                        <p className="text-xs text-slate-400">商品を手渡す際に提示してください</p>
                                     </div>
-                                )}
-
-                                {(isBuyer || (isBuyer && isSeller)) && (
-                                    <div className="space-y-4">
-                                        <p className="text-sm font-bold text-slate-500">【買い手】売り手のQRコードを読み取ってください</p>
-
-                                        {!isScanning ? (
-                                            <div className="space-y-4">
-                                                <div className="w-48 h-48 bg-slate-100 mx-auto flex items-center justify-center border border-slate-300 rounded-lg">
-                                                    <span className="text-slate-400 text-xs">カメラビュー (Mock)</span>
-                                                </div>
-                                                <Button
-                                                    className="w-full bg-blue-600 hover:bg-blue-700 font-bold py-4 shadow-lg shadow-blue-200"
-                                                    onClick={() => setIsScanning(true)}
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <CheckCircle className="w-5 h-5" />
-                                                        カメラを起動して読み取る
-                                                    </span>
-                                                </Button>
-                                                
-                                                <div className="relative flex py-2 items-center">
-                                                    <div className="flex-grow border-t border-slate-200"></div>
-                                                    <span className="flex-shrink-0 mx-4 text-slate-400 text-xs">または</span>
-                                                    <div className="flex-grow border-t border-slate-200"></div>
-                                                </div>
-
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full py-4 text-slate-600 hover:bg-slate-100 border-slate-300"
-                                                    onClick={handleCapturePayment}
-                                                >
-                                                    QRコードを読み取らずに取引完了
-                                                </Button>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-4">
-                                                <div id="reader" className="w-full max-w-sm mx-auto overflow-hidden rounded-lg border border-slate-300"></div>
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full"
-                                                    onClick={() => setIsScanning(false)}
-                                                >
-                                                    キャンセル
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Meeting Place Reminder */}
                         {meetingPlace && (
-                            <div className="bg-slate-50 p-3 rounded text-sm text-slate-600 flex items-center gap-2 justify-center">
-                                <span className="font-bold">待ち合わせ場所:</span> {meetingPlace}
+                            <div className="bg-slate-50 p-3 rounded text-sm text-slate-600 flex items-center gap-2 justify-center border border-slate-100">
+                                <span className="font-bold text-slate-400">待ち合わせ場所:</span> {meetingPlace}
                             </div>
                         )}
                     </CardContent>
