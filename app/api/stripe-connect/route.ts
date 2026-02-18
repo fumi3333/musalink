@@ -11,7 +11,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { email, returnUrl, refreshUrl } = body;
 
-    const baseUrl = process.env.FUNCTIONS_BASE_URL || "http://127.0.0.1:5001/musa-link/us-central1";
+    const baseUrl = process.env.FUNCTIONS_BASE_URL || 
+                    process.env.NEXT_PUBLIC_FUNCTIONS_BASE_URL || 
+                    "https://us-central1-musa-link.cloudfunctions.net";
     const functionUrl = `${baseUrl}/executeStripeConnect`;
     
     // Proxy to Cloud Function
