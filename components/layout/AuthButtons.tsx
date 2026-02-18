@@ -156,9 +156,9 @@ export const AuthButtons = () => {
                 className="text-slate-600 hover:text-violet-600 gap-2 px-2"
                 onClick={() => setMenuOpen(!menuOpen)}
             >
-                {/* Show Email on Desktop */}
-                <span className="hidden md:inline-block text-xs font-medium text-slate-500 max-w-[150px] truncate">
-                    {user.email}
+                                {/* Show Nickname or Masked Email on Desktop */}
+                <span className="hidden md:inline-block text-xs font-bold text-slate-700 max-w-[150px] truncate">
+                    {user.displayName || "ゲスト"}
                 </span>
 
                 <div className="relative">
@@ -178,7 +178,8 @@ export const AuthButtons = () => {
                     <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex flex-col space-y-3">
                             <div className="pb-3 border-b border-slate-100">
-                                <p className="text-sm font-bold text-slate-800 truncate">{user.email}</p>
+                                <p className="text-sm font-bold text-slate-800 truncate">{user.displayName || "ゲスト"}</p>
+                                <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
                                 <div className="flex items-center gap-2 mt-1">
                                     {isVerified ? (
                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
