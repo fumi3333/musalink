@@ -14,8 +14,13 @@ export const calculateFee = (price: number): number => {
     return Math.max(Math.floor(price * SYSTEM_FEE_RATE), 50);
 };
 
-// 学内ドメイン
-export const ALLOWED_DOMAIN = "stu.musashino-u.ac.jp";
+// 学内ドメイン設定
+export const ALLOWED_DOMAINS = [
+    "stu.musashino-u.ac.jp",
+    "musashino-u.ac.jp"
+];
+
+export const ALLOWED_DOMAIN = ALLOWED_DOMAINS[0]; // Legacy support if needed
 
 // Cloud Functions のベースURL（API Route が使えない静的ホストでも Stripe 連携できるように直接呼ぶ）
 export const FUNCTIONS_BASE_URL =
@@ -25,6 +30,23 @@ export const FUNCTIONS_BASE_URL =
 
 // Feature Flags
 export const IS_BETA = process.env.NEXT_PUBLIC_IS_BETA === 'true';
+
+// 学部リスト
+export const DEPARTMENTS = [
+    "文学部",
+    "グローバル学部",
+    "法学部",
+    "経済学部",
+    "経営学部",
+    "アントレプレナーシップ学部",
+    "データサイエンス学部",
+    "人間科学部",
+    "ウェルビーイング学部",
+    "工学部",
+    "教育学部",
+    "薬学部",
+    "看護学部"
+];
 
 // 出品カテゴリー（教科書以外も出品可能）
 export const ITEM_CATEGORIES: { value: ItemCategory; label: string }[] = [

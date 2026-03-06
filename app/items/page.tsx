@@ -58,11 +58,11 @@ export default function ItemListView() {
                             <h1 className="text-2xl font-bold text-slate-900">出品一覧</h1>
                             <p className="text-slate-500 text-sm">現在販売中の商品: {loading ? '...' : items.length}件</p>
                         </div>
-                        <Link href="/items/create">
-                            <Button className="font-bold shadow-md bg-slate-900 text-white hover:bg-slate-800">
+                        <Button asChild className="font-bold shadow-md bg-slate-900 text-white hover:bg-slate-800">
+                            <Link href="/items/create">
                                 <Plus className="mr-2 h-4 w-4" /> 商品を出品
-                            </Button>
-                        </Link>
+                            </Link>
+                        </Button>
                     </div>
 
                     {/* Search & Filter Bar */}
@@ -133,9 +133,11 @@ export default function ItemListView() {
                 ) : items.length === 0 ? (
                     <div className="text-center py-20 bg-white rounded-lg border-2 border-dashed border-slate-200">
                         <p className="text-slate-500 mb-4">まだ出品された商品はありません</p>
-                        <Link href="/items/create">
-                            <Button>最初の出品者になる</Button>
-                        </Link>
+                        <Button asChild>
+                            <Link href="/items/create">
+                                最初の出品者になる
+                            </Link>
+                        </Button>
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">

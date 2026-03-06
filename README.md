@@ -1,75 +1,107 @@
-# 🦅 Musalink (ムサリンク)
+# Musalink
 
-**武蔵野大学 学生専用 教科書マッチングプラットフォーム**
+武蔵野大学 学生専用 教科書マッチングプラットフォーム
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg) ![Status](https://img.shields.io/badge/status-Live-success.svg)
+Version: 1.0.0 | Status: Live
 
-## 📌 プロジェクト概要 (Project Overview)
+## プロジェクト概要
 
-Musalinkは、武蔵野大学の学生間で**教科書や学修資料を安全かつ安価に循環させること**を目的とした、自主開発のWebプラットフォームです。
+Musalink は、武蔵野大学の学生間で教科書や学修資料を安全かつ安価に循環させることを目的とした、自主開発の Web プラットフォームです。
 
-「先輩から後輩へ知を受け継ぐ」をコンセプトに、従来の掲示板やSNSでの売買における「決済の不安」や「検索のしづらさ」といった課題を、最新のWeb技術を用いて解決します。
+従来の掲示板や SNS での売買における「決済の不安」や「検索のしづらさ」といった課題を、最新の Web 技術を用いて解決することを主眼に置いています。学内ドメインによる完全クローズドな環境と、エスクロー決済を組み合わせることで、C2C 取引における信頼性を担保しています。
 
-> **Note**: 本プロジェクトは学生による完全な個人開発であり、大学の公式プロジェクトではありません。
-
----
-
-## 🚀 最新の本番環境 (Production)
-
-現在、以下のURLで稼働しており、実際にPC・スマートフォンからご利用いただけます。
-
-👉 **[https://musalink.vercel.app](https://musalink.vercel.app)**
-
-*   **閲覧**: ログインなしで出品一覧をご覧いただけます。
-*   **利用**: 武蔵野大学のGoogleアカウント (`@stu.musashino-u.ac.jp`) でログインすることで、出品・購入リクエスト・チャット機能が利用可能です。
+Note: 本プロジェクトは学生による完全な個人開発であり、大学の公式プロジェクトではありません。
 
 ---
 
-## 💡 解決する課題と機能 (Features)
+## 本番環境
 
-### 1. 学内限定の安心プラットフォーム
-認証基盤に大学のGoogleアカウントを採用。**「武蔵野大生しかいない」** クローズドな環境で、安心して取引を行えます。
+現在、以下の URL で稼働しており、実際に利用可能です。
 
-### 2. 安全なエスクロー決済 (Stripe)
-現金の直接手渡しによるトラブルや、振り込み詐欺を防ぐため、**Stripe Connect** を用いたエスクロー決済（一時預かり）を導入しています。商品は手渡しですが、お金のやり取りはシステム上で完結します。
+URL: https://musa-link.web.app/
 
-### 3. "ゼロヒット" 需要検知 (Data Strategy)
-学生が検索して見つからなかった教科書（ゼロヒット検索）をシステムが記録。
-「法学部の1年生が『民法入門』を探しているが、在庫がない」といった**潜在的な需要を可視化**し、特定の学部・学年の先輩に出品を促すことができます。
-
-### 4. 信頼スコア (Trust Score)
-取引完了後の相互評価に基づき、ユーザーの信頼度を **信頼スコア (1.0 - 5.0)** として算出。
-誠実な取引を行うユーザーが正当に評価される仕組みを実装しています。
+*   閲覧: ログインなしで出品一覧を閲覧可能。
+*   利用: 武蔵野大学の Google アカウント (`@stu.musashino-u.ac.jp`) による OAuth ログインを経ることで、出品・購入リクエスト・チャット等の全機能が利用可能となります。
 
 ---
 
-## 🛠️ 技術スタック (Technology Stack)
+## 解決する課題とシステム設計のアプローチ
 
-モダンなWeb技術を採用し、高速でスケーラブルなアプリケーションを構築しています。
+本アプリケーションは、単なるマッチングにとどまらず、実際の運用におけるリスクやフリクションを最小化するため、以下の具体的な技術的アプローチを実装しています。
 
-| カテゴリ | 技術 | 選定理由 |
+### 1. 取引の安全性とプライバシー保護 (Revealable Content)
+決済が「仮押さえ（payment_pending）」状態となり、商品の受け渡しが完了（completed）するまで、取引の当事者間でさえも個人の識別情報（学籍番号、大学メールアドレス等）を相互に秘匿する設計を導入しています。
+これを実現するため、フロントエンドの `RevealableContent` コンポーネントおよび Firestore 上の `private_data` コレクションへの厳格なアクセス制御を連携させ、決済と情報開示のタイミングを完全に同期しています。
+
+### 2. QRコードを利用した対面受け渡しの安全性担保
+本サービスはキャンパス内での手渡しを前提としているため、非対面での不正な「受取完了」操作を防止する仕組みを設けています。
+`QRCodeGenerator` コンポーネントを通じて取引専用の一意なQRコードをフロントエンドで生成し、買い手が売り手のスマートフォン画面をスキャンすることをトリガーに、Cloud Functions 経由で Stripe の Capture API を叩き本決済（売上確定）を実行するフローを構築しています。
+
+### 3. OpenBD API による出品体験の最適化
+教科書出品の心理的ハードルを下げるため、`services/books.ts` において OpenBD API と連携しています。
+ユーザーが10桁または13桁の ISBN コードを入力するだけで、タイトル、著者、出版社、および書影画像を自動補完し、正確なデータによる出品をアシストします。
+
+### 4. IDOR対策とバックエンド主導の権限管理 (Cloud Functions)
+Stripe Connect のログインリンク発行（`createStripeLoginLink`）や取引状況のアンロック（`unlockTransaction`）処理において、クライアントからの ID 指定などのパラメータに依存する Insecure Direct Object Reference (IDOR) の脆弱性を排除しています。
+すべてのセキュアな操作は、Firebase Auth が発行する JWT を元に Cloud Functions 内でユーザーを特定し、Firestore の秘匿領域（`users/{uid}/private_data`）を参照するサーバーサイド主導の権限管理で構成されています。
+
+### 5. ゼロヒット需要検知によるデータ戦略
+`services/analytics.ts` において、ユーザーが教科書を検索して1件も該当しなかった場合（ゼロヒット検索）のクエリを自動的にロギングする機構を備えています。「法学部の1年生が『民法入門』を探しているが在庫がない」といった潜在的な需要（Demand Mismatch）をプラットフォーム側が可視化し、ピンポイントで出品を促す施策へと繋げるデータ基盤を構築しています。
+
+---
+
+## システムアーキテクチャ
+
+本アプリケーションは、Next.js (App Router) をフロントエンドとし、Firebase (BaaS) と Stripe (決済基盤) をバックエンドに持つサーバーレスアーキテクチャを採用しています。
+
+```mermaid
+graph TD
+    Client[Client Browser]
+    
+    subgraph Frontend [Next.js App Router on Firebase Hosting]
+        UI[React Components / UI]
+        API[API Routes Proxy]
+    end
+    
+    subgraph Backend [Firebase]
+        Auth[Firebase Authentication]
+        Firestore[(Cloud Firestore)]
+        Storage[Cloud Storage]
+        Functions[Cloud Functions]
+    end
+    
+    subgraph Payment [Stripe]
+        StripeConnect[Stripe Connect]
+    end
+    
+    Client -->|1. Google Login @stu.musashino-u.ac.jp| Auth
+    Client <-->|2. Fetch/Update Data| Firestore
+    Client -->|3. Upload Item Images| Storage
+    Client -->|4. Request Payment Intent| API
+    
+    API -->|5. Forward with Bearer Token| Functions
+    Functions <-->|6. Verify & Create/Capture Payment| StripeConnect
+    Functions -->|7. Update Transaction Status / Reveal Info| Firestore
+```
+
+---
+
+## 技術スタックと選定理由
+
+| カテゴリ | 採用技術 | 選定理由・役割 |
 | :--- | :--- | :--- |
-| **Frontend** | **Next.js 14** (App Router) | 高速なページ遷移とSEO、サーバーコンポーネントによる効率化 |
-| | **Tailwind CSS** | 柔軟でメンテナンス性の高いスタイリング |
-| | **Typescript** | 型安全性によるバグの低減と開発効率の向上 |
-| **Backend** | **Firebase** | 認証(Auth)、DB(Firestore)、サーバーレス関数(Functions)の統合 |
-| | **Vercel** | フロントエンドの高速なデプロイと運用 |
-| | **Payment** | **Stripe Connect** | マーケットプレイス型決済（C2C取引）の標準 |
-| **Language** | **Japanese** | 完全日本語対応（UI/UX設計） |
+| **Frontend** | **Next.js (App Router)** | React Server Components による描画効率化と、ルーティング・API 構築の容易さ。 |
+| | **TypeScript** | 静的型付けによるバグの早期発見、およびリファクタリングの安全性の確保。 |
+| | **Tailwind CSS** | ユーティリティファーストアプローチによる迅速かつ一貫性のあるスタイリング。 |
+| **Backend** | **Firebase** | 認証 (Auth)、リアルタイムデータベース (Firestore)、ファイルストレージ (Storage)、サーバーレス処理 (Functions) の統合的な提供インフラとして採用。 |
+| | **Firebase Hosting** | フロントエンドのシームレスなデプロイとFirebase関連サービスとの強固な連携。 |
+| **Payment** | **Stripe Connect** | プラットフォーム事業者として出品者（売り手）への売上分配を自動化・法規制対応を考慮した C2C マーケットプレイス型決済ソリューションとして導入。 |
 
 ---
 
-## 🛡️ セキュリティとプライバシー
+## 開発者
 
-*   **データ保護**: 通信は全てSSL/TLSで暗号化されています。
-*   **権限管理**: Firestoreセキュリティルールにより、本人のみが自身のデータを操作できるよう厳格に管理されています。
-*   **決済情報**: クレジットカード情報はStripeが管理し、本システムサーバーでは一切保持しません（PCI DSS準拠）。
-
----
-
-## 🤝 開発者 (Developer)
-
-**経済学部 / 松田**
+武蔵野大学 経済学部 / 松田
 
 ---
 © 2026 Musalink

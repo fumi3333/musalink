@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 import { Footer } from "@/components/layout/Footer";
 import { InAppBrowserGuard } from "@/components/layout/InAppBrowserGuard"; // [New]
-import { OnboardingModal } from "@/components/auth/OnboardingModal";
+
 
 export const metadata: Metadata = {
   title: "Musalink | 武蔵野大学生専用の教科書・フリマアプリ",
@@ -54,7 +54,7 @@ export default function RootLayout({
               {children}
             </InAppBrowserGuard>
           </main>
-          <OnboardingModal />
+
           <Footer />
           <Toaster richColors position="top-center" />
         </AuthProvider>

@@ -13,11 +13,34 @@
                 "source": "**",
                 "destination": "/index.html"
             }
+        ],
+        "headers": [
+            {
+                "source": "**/*.html",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "no-cache, no-store, must-revalidate"
+                    }
+                ]
+            },
+            {
+                "source": "**/_next/data/**/*.json",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "no-cache, no-store, must-revalidate"
+                    }
+                ]
+            }
         ]
     },
     "firestore": {
         "rules": "firestore.rules",
         "indexes": "firestore.indexes.json"
+    },
+    "storage": {
+        "rules": "storage.rules"
     },
     "functions": {
         "source": "functions",

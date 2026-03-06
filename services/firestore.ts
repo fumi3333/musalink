@@ -42,26 +42,7 @@ export const rateUser = async (targetUserId: string, transactionId: string, role
 
 // --- Items Service ---
 
-// Mock Data for Fallback - Status corrected to 'listing'
-const MOCK_ITEMS: Item[] = [
 
-    {
-        id: 'mock_item_2',
-        title: 'Mock Textbook B',
-        price: 800,
-        seller_id: 'mock-user-s2527084',
-        status: 'listing',
-        condition: 3,
-        description: 'Good condition, some highlights.',
-        createdAt: new Date(),
-        image_urls: [],
-        metadata: {
-            seller_grade: 'B3',
-            seller_department: 'Law',
-            seller_verified: true
-        }
-    }
-];
 
 
 // Helper to timeout a promise
@@ -78,7 +59,7 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue: T): Prom
 // --- Items Service ---
 import { logEvent, logSearchMiss } from './analytics';
 
-// ... (MOCK_ITEMS definitions)
+
 
 export const createItem = async (item: Omit<Item, 'id'>) => {
     try {
@@ -142,8 +123,8 @@ export const getItems = async (filters?: { department?: string, grade?: string, 
         );
 
         if (!querySnapshot) {
-            console.warn("getItems timed out/offline. Returning mock items.");
-            return MOCK_ITEMS;
+            console.warn("getItems timed out/offline. Returning empty.");
+            return [];
         }
 
         let results = querySnapshot.docs.map(doc => ({
@@ -181,8 +162,8 @@ export const getItems = async (filters?: { department?: string, grade?: string, 
     } catch (error: any) {
         // ... (Offline handling)
         if (error.code === 'unavailable' || error.message?.includes('offline')) {
-            console.warn("Firestore offline (getItems), returning mocks.");
-            return MOCK_ITEMS;
+            console.warn("Firestore offline (getItems), returning empty.");
+            return [];
         }
         console.error("Error getting items:", error);
         return [];
@@ -191,16 +172,14 @@ export const getItems = async (filters?: { department?: string, grade?: string, 
 
 export const getItem = async (itemId: string): Promise<Item | null> => {
     try {
-        if (itemId.startsWith('mock_')) {
-            return MOCK_ITEMS.find(i => i.id === itemId) || MOCK_ITEMS[0];
-        }
+
 
         const docRef = doc(db, "items", itemId);
         const docSnap = await withTimeout(getDoc(docRef), 2000, null);
 
         if (!docSnap) {
-            console.warn("getItem timed out. Returning mock.");
-            return MOCK_ITEMS.find(i => i.id === itemId) || MOCK_ITEMS[0];
+            console.warn("getItem timed out. Returning null.");
+            return null;
         }
 
         if (docSnap.exists()) {
@@ -210,8 +189,8 @@ export const getItem = async (itemId: string): Promise<Item | null> => {
         }
     } catch (error: any) {
         if (error.code === 'unavailable' || error.message?.includes('offline')) {
-            console.warn("Firestore offline (getItem), returning mock.");
-            return MOCK_ITEMS.find(i => i.id === itemId) || MOCK_ITEMS[0];
+            console.warn("Firestore offline (getItem), returning null.");
+            return null;
         }
         console.error("Error getting item:", error);
         return null; // Return null instead of throwing to prevent UI crash
@@ -333,17 +312,7 @@ export const getUser = async (userId: string): Promise<User> => {
         console.warn("User fetch failed, using mock", e);
     }
 
-    // Fallback Mock Data
-    return {
-        id: userId,
-        display_name: userId === 'user_001' ? '田中 太郎' : 'ゲストユーザー',
-        trust_score: 50,
-        coin_balance: 1000,
-        locked_balance: 0,
-        student_id: userId === 'user_001' ? 's1234567' : undefined,
-        university_email: userId === 'user_001' ? 's1234567@musashino-u.ac.jp' : undefined,
-        is_demo: userId !== 'user_001' // Guest is demo
-    };
+    throw new Error(`User ${userId} not found`);
 }
 
 export const updateUser = async (userId: string, data: Partial<User>) => {

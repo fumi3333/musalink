@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { OnboardingModal } from "@/components/auth/OnboardingModal";
+
 
 function NewTransactionContent() {
     const router = useRouter();
@@ -46,13 +48,11 @@ function NewTransactionContent() {
         }
         setCreating(true);
         try {
-            const transactionId = await createTransaction(item.id, userData.id, item.seller_id, {
-                is_demo: !!userData.is_demo
-            });
+            const transactionId = await createTransaction(item.id, userData.id, item.seller_id);
             router.push(`/transactions/detail?id=${transactionId}`);
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            toast.error("取引の開始に失敗しました: " + ((e as any).message || "不明なエラー"));
+            toast.error("取引の開始に失敗しました: " + (e.message || "不明なエラー"));
         } finally {
             setCreating(false);
         }
@@ -62,14 +62,15 @@ function NewTransactionContent() {
     if (loading) return <div className="p-10 text-center">商品を読み込み中...</div>;
     if (!item) return <div className="p-10 text-center">Item not found</div>;
 
-    // Logic: Block if (Buyer == Seller) AND (Not Demo User)
+    // Logic: Block if (Buyer == Seller)
     const isSelfTrade = userData?.id === item.seller_id;
-    const isDemoUser = !!userData?.is_demo;
-    const shouldBlock = isSelfTrade && !isDemoUser;
+    const shouldBlock = isSelfTrade;
 
     return (
         <div className="min-h-screen bg-slate-50 py-10 px-4 flex items-center justify-center">
+            <OnboardingModal />
             <Card className="w-full max-w-md">
+
                 <CardHeader>
                     <CardTitle>取引を開始しますか？</CardTitle>
                 </CardHeader>

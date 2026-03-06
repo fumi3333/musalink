@@ -271,9 +271,6 @@ Musalinkで連絡先を確認しました。
                                 <p className="text-sm text-center text-slate-500 mb-4">
                                     下のフォームからカード情報を入力して<br />
                                     「支払いを予約する」ボタンを押してください。<br />
-                                    <span className="text-amber-600 font-bold text-xs mt-1 block bg-amber-50 p-1 rounded">
-                                        ※これはテスト環境です。実際の課金は発生しません。
-                                    </span>
                                 </p>
 
                                 {clientSecret ? (
@@ -287,15 +284,9 @@ Musalinkで連絡先を確認しました。
                                         </Elements>
                                     </div>
                                 ) : (
-                                    // Fallback / Demo Button if no clientSecret (e.g. Demo Mode or Error)
-                                    <div className="text-center">
-                                        <p className="text-red-500 text-sm mb-2">決済システムの準備ができませんでした(Demo Mode)</p>
-                                        <Button
-                                            className="w-full bg-slate-600 hover:bg-slate-700"
-                                            onClick={() => onStatusChange('payment_pending')}
-                                        >
-                                            デモ用: 支払いをスキップ
-                                        </Button>
+                                    <div className="text-center py-6">
+                                        <p className="text-slate-500 text-sm mb-2">決済システムの準備中、またはエラーが発生しました。</p>
+                                        <p className="text-slate-400 text-xs">ページを再読み込みするか、時間をおいてお試しください。</p>
                                     </div>
                                 )}
                             </>

@@ -8,11 +8,14 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DEPARTMENTS } from "@/lib/constants"
 
 export function OnboardingModal() {
     const { user, userData } = useAuth()
     const [open, setOpen] = useState(false)
     const [nickname, setNickname] = useState("")
+    const [department, setDepartment] = useState("")
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
@@ -37,10 +40,13 @@ export function OnboardingModal() {
         try {
             await updateUser(user!.uid, { 
                 display_name: nickname,
+                department: department,
                 isProfileComplete: true 
             })
             toast.success("プロフィールを設定しました")
             setOpen(false)
+            // Force reload to sync AuthContext and remove the modal correctly
+            window.location.reload()
         } catch (e) {
             toast.error("保存に失敗しました")
             console.error(e)
@@ -55,19 +61,38 @@ export function OnboardingModal() {
                 <DialogHeader>
                     <DialogTitle>ようこそ Musalink へ！</DialogTitle>
                     <DialogDescription>
-                        はじめに、アプリ内で表示するニックネームを設定してください。<br />
+                        はじめに、プロフィールを設定してください。<br />
                         <span className="text-xs text-slate-500">※本名は入力しないでください。後で変更可能です。</span>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="nickname">ニックネーム</Label>
+                        <Label htmlFor="nickname">ニックネーム (表示名)</Label>
                         <Input
                             id="nickname"
                             placeholder="例: むさし"
                             value={nickname}
                             onChange={(e) => setNickname(e.target.value)}
                         />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>所属学部</Label>
+                        <Select
+                            value={department}
+                            onValueChange={setDepartment}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="学部を選択してください" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {DEPARTMENTS.map((dept) => (
+                                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-slate-400">
+                            ※ 学部は必須ではありませんが、同じキャンパスの人とマッチングしやすくなります。
+                        </p>
                     </div>
                 </div>
                 <DialogFooter>

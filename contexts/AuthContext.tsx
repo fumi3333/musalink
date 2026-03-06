@@ -14,7 +14,6 @@ interface AuthContextType {
     unreadNotifications: number;
     login: () => Promise<void>;
     logout: () => Promise<void>;
-    debugLogin: (role?: 'seller' | 'buyer') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,30 +33,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             clearTimeout(timeoutId);
             if (firebaseUser) {
-                // [Debug/Guest Handling] Check FIRST before domain enforcement
-                if (firebaseUser.isAnonymous) {
-                     console.log("Debug/Guest Login Active");
-                     setError(null);
-                     setUser(firebaseUser);
-                     setUserData({
-                         id: firebaseUser.uid,
-                         display_name: "テスト用 買い手",
-                         email: "guest_buyer@demo.local",
-                         universityId: "musashino",
-                         grade: "B2",
-                         departmentId: "工学部",
-                         student_id: "guest123",
-                         is_demo: true,
-                         trust_score: 50,
-                         coin_balance: 10000
-                     });
-                     setLoading(false);
-                     return;
-                }
+
 
                 // [Security Check] Strict Domain Enforcement
                 const email = firebaseUser.email || "";
-                if (!email.endsWith("@stu.musashino-u.ac.jp") && !email.endsWith("@musashino-u.ac.jp")) {
+                
+                // Load allowed domains from constants
+                const { ALLOWED_DOMAINS } = await import('@/lib/constants');
+                const isAllowed = ALLOWED_DOMAINS.some(domain => email.endsWith(domain));
+
+                if (!isAllowed) {
                     console.warn(`[Auth] Blocked unauthorized domain: ${email}`);
                     await signOut(auth);
                     setUser(null);
@@ -234,20 +219,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const debugLogin = async (role: 'seller' | 'buyer' = 'seller') => {
-        setError(null);
-        try {
-            const { signInAnonymously } = await import('firebase/auth');
-            await signInAnonymously(auth);
-            toast.success("テスト用アカウントでログインしました");
-        } catch (e: any) {
-            console.error(e);
-            toast.error("デモログインエラー: " + e.message);
-        }
-    };
+
 
     return (
-        <AuthContext.Provider value={{ user, userData, loading, error, unreadNotifications, login, logout, debugLogin }}>
+        <AuthContext.Provider value={{ user, userData, loading, error, unreadNotifications, login, logout }}>
             {children}
         </AuthContext.Provider>
     );
@@ -293,14 +268,18 @@ function calculateGrade(email: string): string {
 function getUniversityFromEmail(email: string): string | null {
     if (!email) return null;
     
+    // Import logic is tricky in helper function outside component, 
+    // strictly speaking we should pass allowed domains or hardcode "university mapping" here.
+    // For now, we keep the mapping logic explicit.
+    
     // 1. Musashino University
     if (email.endsWith("@stu.musashino-u.ac.jp") || email.endsWith("@musashino-u.ac.jp")) {
         return "musashino";
     }
 
-    // 2. Future Expansions (Commented out but ready)
-    // if (email.endsWith("@keio.jp")) return "keio";
-    // if (email.endsWith("@waseda.jp")) return "waseda";
-
-    return null; // Unsupported domain
+    // 2. Future: Check against other mappings if needed
+    
+    return null; // Unsupported domain for *enrollment*, even if allowed for login? 
+    // Actually, if we allow login, we should map it. 
+    // For the "New Email" task, if it's Musashino's new domain, we add it here.
 }

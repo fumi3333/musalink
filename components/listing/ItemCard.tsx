@@ -128,7 +128,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
             </CardContent>
 
             <CardFooter className="p-4 pt-0">
-                <Link href={`/items/${item.id}`} className="w-full">
+                <Link href={`/items/detail?id=${item.id}`} className="w-full">
                     <Button variant="outline" size="sm" className="w-full border-slate-200 text-slate-600 group-hover:bg-violet-50 group-hover:text-violet-700 group-hover:border-violet-200 transition-all font-bold">
                         詳細を見る
                     </Button>

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 
 export const AuthButtons = () => {
-    const { user, login, logout, loading, error, debugLogin, unreadNotifications } = useAuth();
+    const { user, userData, login, logout, loading, error, unreadNotifications } = useAuth();
     const [showErrorDialog, setShowErrorDialog] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -54,12 +54,7 @@ export const AuthButtons = () => {
                     {isLoggingIn ? "ログイン中..." : "ログイン"}
                 </Button>
 
-                {/* TEST MODE ACCOUNTS — Enabled for Verification */}
-                <div className="flex flex-col gap-1">
-                    <Button onClick={() => debugLogin('buyer')} variant="outline" size="sm" className="text-[10px] h-6 px-2 text-slate-500 border-dashed border-slate-300 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all">
-                        🔵 テスト用アカウントでログイン
-                    </Button>
-                </div>
+
 
                 <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
                     <DialogContent className="sm:max-w-[425px]">
@@ -95,49 +90,7 @@ export const AuthButtons = () => {
 
     return (
         <div className="flex items-center gap-4">
-            {/* [Debug] Agent Testing Buttons - Visible only in Development */}
-            {process.env.NODE_ENV === 'development' && (
-                <div className="flex gap-1 flex-wrap">
-                    <Button variant="ghost" size="sm" onClick={() => debugLogin('seller')} className="text-xs text-amber-600 bg-amber-50">
-                        テスト売り手
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => debugLogin('buyer')} className="text-xs text-blue-600 bg-blue-50">
-                        テスト買い手
-                    </Button>
-                    {/* Email Test Button */}
-                    <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-xs text-green-600 bg-green-50"
-                        onClick={async () => {
-                            if (!user) {
-                                alert("まずは自分のGoogleアカウントでログインしてください！");
-                                return;
-                            }
-                            try {
-                                const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
-                                const { db } = await import('@/lib/firebase');
-                                
-                                // Create dummy transaction (Self-Trade) => Triggers onTransactionCreated
-                                await addDoc(collection(db, "transactions"), {
-                                    buyer_id: user.uid,
-                                    seller_id: user.uid, // Send to ME
-                                    item_id: "test_item_id", // Dummy
-                                    status: "request_sent",
-                                    createdAt: serverTimestamp(),
-                                    is_test_email: true
-                                });
-                                const { toast } = await import('sonner');
-                                toast.success(`送信成功！${user.email} 宛のメールを確認してください`);
-                            } catch(e: any) {
-                                alert("送信失敗: " + e.message);
-                            }
-                        }}
-                    >
-                        ✉️ 通知テスト
-                    </Button>
-                </div>
-            )}
+
 
             {/* Notification Bell */}
             <Link href="/notifications">
@@ -158,7 +111,7 @@ export const AuthButtons = () => {
             >
                                 {/* Show Nickname or Masked Email on Desktop */}
                 <span className="hidden md:inline-block text-xs font-bold text-slate-700 max-w-[150px] truncate">
-                    {user.displayName || "ゲスト"}
+                    {userData?.display_name || user.displayName || "ゲスト"}
                 </span>
 
                 <div className="relative">
@@ -178,7 +131,7 @@ export const AuthButtons = () => {
                     <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex flex-col space-y-3">
                             <div className="pb-3 border-b border-slate-100">
-                                <p className="text-sm font-bold text-slate-800 truncate">{user.displayName || "ゲスト"}</p>
+                                <p className="text-sm font-bold text-slate-800 truncate">{userData?.display_name || user.displayName || "ゲスト"}</p>
                                 <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
                                 <div className="flex items-center gap-2 mt-1">
                                     {isVerified ? (

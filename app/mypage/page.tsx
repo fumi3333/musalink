@@ -21,11 +21,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { InterestSelector } from '@/components/profile/InterestSelector';
+import { DEPARTMENTS } from '@/lib/constants';
 
 // --- Sub Component: Listing Item ---
 const ListingItemCard = ({ item }: { item: Item }) => {
     return (
-        <Link href={`/items/${item.id}`} className="block">
+        <Link href={`/items/detail?id=${item.id}`} className="block">
             <div className="flex items-center gap-4 p-4 border-b border-slate-100 bg-white hover:bg-slate-50 transition-colors cursor-pointer group">
                 <div className="w-16 h-16 bg-slate-200 rounded overflow-hidden flex-shrink-0 relative">
                     {item.image_urls?.[0] ? (
@@ -131,12 +132,29 @@ function MyPageContent() {
     const [myTransactions, setMyTransactions] = useState<Transaction[]>([]);
     const [loadingData, setLoadingData] = useState(true);
 
-    // --- Edit Profile State (Moved up to avoid Hook Error) ---
+    // --- Edit Profile State ---
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editForm, setEditForm] = useState({
         display_name: "",
+        department: "",
         interests: [] as string[]
     });
+
+    const handleSaveProfile = async () => {
+        if (!userData?.id || !editForm.display_name.trim()) {
+            toast.error("表示名を入力してください");
+            return;
+        }
+        try {
+            await updateUser(userData.id, { 
+                display_name: editForm.display_name,
+            });
+            toast.success("プロフィール設定を保存しました");
+        } catch (e) {
+            toast.error("保存に失敗しました");
+            console.error(e);
+        }
+    };
 
     useEffect(() => {
         if (!authLoading && !userData) {
@@ -158,6 +176,16 @@ function MyPageContent() {
         }
     }, [userData, authLoading, router]);
 
+    const openEdit = () => {
+        if (!userData) return;
+        setEditForm({
+            display_name: userData.display_name || "",
+            department: userData.department || "",
+            interests: userData.interests || []
+        });
+        setIsEditOpen(true);
+    };
+
     if (authLoading || (!userData && loadingData)) return <div className="min-h-screen pt-20 text-center">読み込み中...</div>;
 
     const activeListings = myItems.filter(i => i.status === 'listing');
@@ -169,14 +197,7 @@ function MyPageContent() {
 
     // --- Edit Profile Logic ---
 
-    const openEdit = () => {
-        if (!userData) return;
-        setEditForm({
-            display_name: userData.display_name || "",
-            interests: userData.interests || []
-        });
-        setIsEditOpen(true);
-    };
+
 
     const handleUpdateProfile = async () => {
         if (!userData) return;
@@ -227,7 +248,6 @@ function MyPageContent() {
                         <div className="flex items-center gap-1 text-amber-400 text-sm">
                             <Star className="h-4 w-4 fill-current" />
                             <span className="font-bold text-slate-700">5.0</span>
-                            <span className="text-slate-400 text-xs ml-1">(Mock Rating)</span>
                         </div>
 
                         {/* Tags Display */}
@@ -269,6 +289,23 @@ function MyPageContent() {
                                 onChange={(tags: string[]) => setEditForm({ ...editForm, interests: tags })}
                             />
                         </div>
+
+                        <div className="space-y-2">
+                           <Label>所属学部</Label>
+                           <Select
+                               value={editForm.department}
+                               onValueChange={(val) => setEditForm({ ...editForm, department: val })}
+                           >
+                               <SelectTrigger>
+                                   <SelectValue placeholder="学部を選択してください" />
+                               </SelectTrigger>
+                               <SelectContent>
+                                   {DEPARTMENTS.map((dept) => (
+                                       <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                                   ))}
+                               </SelectContent>
+                           </Select>
+                        </div>
                     </div>
 
                     <DialogFooter>
@@ -293,12 +330,12 @@ function MyPageContent() {
                         <Card className="border-none shadow-none bg-transparent">
                             <CardContent className="p-0 space-y-4">
                                 {/* Create New Button */}
-                                <Link href="/items/create">
-                                    <Button className="w-full bg-red-500 hover:bg-red-600 font-bold shadow-md text-white mb-4 py-6">
+                                <Button asChild className="w-full bg-red-500 hover:bg-red-600 font-bold shadow-md text-white mb-4 py-6">
+                                    <Link href="/items/create">
                                         <Package className="mr-2 h-5 w-5" />
                                         出品する
-                                    </Button>
-                                </Link>
+                                    </Link>
+                                </Button>
 
                                 <div className="bg-slate-50 rounded-lg overflow-hidden">
                                     <h3 className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">出品中 ({activeListings.length})</h3>
@@ -369,6 +406,9 @@ function MyPageContent() {
                                         onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
                                     />
                                     <p className="text-xs text-slate-500">取引チャットや商品ページに表示されます。</p>
+                                    <div className="pt-2">
+                                        <Button onClick={handleSaveProfile} className="w-full md:w-auto font-bold">変更を保存</Button>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-2">

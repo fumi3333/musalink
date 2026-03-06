@@ -18,7 +18,10 @@ function getTransactionStatusLabel(status: TransactionStatus): string {
     }
 }
 import { TransactionDetailView } from '@/components/transaction/TransactionDetailView';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { useAuth } from '@/contexts/AuthContext';
+import { FUNCTIONS_BASE_URL } from '@/lib/constants';
+
 
 function TransactionDetailContent() {
     const searchParams = useSearchParams();
@@ -62,7 +65,7 @@ function TransactionDetailContent() {
                     // Next.js API Routeプロキシ経由でCloud Functionsを呼び出し（CORS回避）
                     if (userData?.id && user) {
                         const token = await user.getIdToken();
-                        const response = await fetch('/api/create-payment-intent', {
+                        const response = await fetch(`${FUNCTIONS_BASE_URL}/createPaymentIntent`, {
                             method: 'POST',
                             headers: { 
                                 'Content-Type': 'application/json',
@@ -108,46 +111,24 @@ function TransactionDetailContent() {
         setTransaction(prev => prev ? { ...prev, status: newStatus } : null);
 
         try {
-            // DEMO MODE CHECK
-            const currentUser = userData as User; // safe cast for now
-            // [Fix] Robust Demo Check: Check flag OR known demo email patterns
-            const isDemoUser = currentUser?.is_demo === true ||
-                currentUser?.university_email?.startsWith('s2527') ||
-                currentUser?.university_email?.startsWith('s11111');
-
+            const currentUser = userData as User;
             if (newStatus === 'completed') {
-                if (isDemoUser) {
-                    // DEMO MODE: Bypass Cloud Function / Stripe
-                    // Directly update Firestore + Unlock Mock Data
-                    const { updateTransactionStatus } = await import('@/services/firestore');
-                    const { Timestamp } = await import('firebase/firestore');
-
-                    await updateTransactionStatus(transactionId, 'completed', {
-                        unlocked_assets: {
-                            student_id: seller?.student_id || "s9999999",
-                            university_email: seller?.university_email || "demo@musashino-u.ac.jp",
-                            unlockedAt: Timestamp.now()
-                        }
-                    });
-                    toast.success("決済完了！(デモモード: Stripeスキップ)");
-                } else {
-                    // [SECURITY] Standard Flow - API Routeプロキシ経由
-                    setLoading(true);
-                    const token = await user?.getIdToken();
-                    const unlockRes = await fetch('/api/unlock-transaction', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                        },
-                        body: JSON.stringify({
-                            transactionId: transactionId,
-                            userId: currentUser?.id
-                        }),
-                    });
-                    if (!unlockRes.ok) {
-                        throw new Error('Unlock failed');
-                    }
+                // [SECURITY] Standard Flow - API Routeプロキシ経由
+                setLoading(true);
+                const token = await user?.getIdToken();
+                const unlockRes = await fetch(`${FUNCTIONS_BASE_URL}/unlockTransaction`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify({
+                        transactionId: transactionId,
+                        userId: currentUser?.id
+                    }),
+                });
+                if (!unlockRes.ok) {
+                    throw new Error('Unlock failed');
                 }
             } else {
                 // Other statuses (approve/reject) still use direct update for now (MVP)
@@ -180,6 +161,10 @@ function TransactionDetailContent() {
     return (
         <div className="min-h-screen bg-slate-50 py-10 px-4">
             <div className="max-w-4xl mx-auto">
+                <Breadcrumbs items={[
+                     { label: 'マイページ', href: '/mypage' },
+                     { label: '取引詳細' }
+                ]} />
                 <h1 className="text-xl font-bold mb-6 text-slate-700">取引詳細</h1>
                 <TransactionDetailView
                     transaction={transaction}

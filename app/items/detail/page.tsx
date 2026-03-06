@@ -1,24 +1,30 @@
 "use client"
 
-import React, { use, useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Item, User } from '@/types';
 import { getItem, getUser } from '@/services/firestore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, MessageCircle, Share2, ShieldCheck, Star, User as UserIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { getItemCategoryLabel } from '@/lib/constants';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 
-export default function ItemDetail({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
+function ItemDetailContent() {
+    const searchParams = useSearchParams();
+    const id = searchParams.get('id');
     const [item, setItem] = useState<Item | null>(null);
     const [seller, setSeller] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
     useEffect(() => {
+        if (!id) {
+            setLoading(false);
+            return;
+        }
         const loadData = async () => {
             try {
                 const itemData = await getItem(id);
@@ -40,6 +46,7 @@ export default function ItemDetail({ params }: { params: Promise<{ id: string }>
         loadData();
     }, [id]);
 
+    if (!id) return <div className="min-h-screen flex items-center justify-center">無効な商品IDです</div>;
     if (loading) return <div className="min-h-screen flex items-center justify-center">読み込み中...</div>;
     if (!item) return <div className="min-h-screen flex items-center justify-center">商品が見つかりません</div>;
 
@@ -49,6 +56,12 @@ export default function ItemDetail({ params }: { params: Promise<{ id: string }>
                 <Button variant="ghost" className="mb-4 pl-0 hover:bg-transparent" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" /> 戻る
                 </Button>
+
+                <Breadcrumbs items={[
+                    { label: '商品一覧', href: '/items' },
+                    { label: getItemCategoryLabel(item.category), href: `/items?category=${item.category}` },
+                    { label: item.title }
+                ]} />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Left: Image */}
@@ -117,14 +130,14 @@ export default function ItemDetail({ params }: { params: Promise<{ id: string }>
                                 </CardContent>
                             </Card>
 
-                            {/* Seller Info */}
+                            {/* Seller Info (Masked) */}
                             {seller && (
                                 <div className="flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-100 mb-8">
                                     <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
                                         <UserIcon className="w-6 h-6" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-bold text-slate-700">{seller.display_name || "匿名ユーザー"}</p>
+                                        <p className="text-sm font-bold text-slate-700">武蔵野大学生</p>
                                         <div className="flex items-center text-xs text-slate-500">
                                             <Star className="w-3 h-3 text-yellow-400 fill-current mr-1" />
                                             <span>{seller.trust_score ?? 4.5}</span>
@@ -138,7 +151,7 @@ export default function ItemDetail({ params }: { params: Promise<{ id: string }>
                                              本人確認済
                                          </Badge>
                                     )}
-                                    {/* Campus Badge */}
+                                    {/* Campus Badge (Safe to show) */}
                                     {seller.campus && (
                                         <Badge variant="outline" className={`ml-2 text-[10px] ${
                                             seller.campus === 'musashino' ? 'border-orange-200 text-orange-700 bg-orange-50' :
@@ -181,5 +194,13 @@ export default function ItemDetail({ params }: { params: Promise<{ id: string }>
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function ItemDetailPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+            <ItemDetailContent />
+        </Suspense>
     );
 }

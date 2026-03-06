@@ -27,7 +27,8 @@ const IGNORED_FILES = [
     '.env.development',
     '.env.production',
     'functions/.runtimeconfig.json',
-    'scripts/check-secrets.js' // Ignore self to avoid false positive if we hardcode patterns
+    'scripts/check-secrets.js', // Ignore self to avoid false positive if we hardcode patterns
+    'scripts/verify-client-logic.js' // Ignore verification script using env vars
 ];
 
 try {

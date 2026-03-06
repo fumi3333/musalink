@@ -25,6 +25,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { OnboardingModal } from "@/components/auth/OnboardingModal";
+
 
 export default function CreateListingPage() {
     const { user, userData: authUserData, login } = useAuth(); // Get userData from Context
@@ -65,14 +67,6 @@ export default function CreateListingPage() {
                 // Determine if Verified
                 if (!authUserData.is_verified && !authUserData.is_demo) { // Allow Demo
                     setBlockingReason('unverified');
-                    setCurrentUser(authUserData);
-                    return;
-                }
-
-                // Determine if Payout Enabled
-                // Note: Guest users have charges_enabled = true
-                if (!authUserData.charges_enabled && !authUserData.is_demo) { // Allow Demo
-                    setBlockingReason('payout_missing');
                     setCurrentUser(authUserData);
                     return;
                 }
@@ -165,9 +159,19 @@ export default function CreateListingPage() {
         try {
             let downloadURL = "";
             if (imageFile && user?.uid) {
-                const storageRef = ref(storage, `users/${user.uid}/items/${Date.now()}_${imageFile.name}`);
-                const snapshot = await uploadBytes(storageRef, imageFile);
-                downloadURL = await getDownloadURL(snapshot.ref);
+                try {
+                    const storageRef = ref(storage, `users/${user.uid}/items/${Date.now()}_${imageFile.name}`);
+                    // Use Promise.race to prevent indefinite hangs on upload
+                    const snapshot: any = await Promise.race([
+                        uploadBytes(storageRef, imageFile),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error("Upload timeout")), 15000))
+                    ]);
+                    downloadURL = await getDownloadURL(snapshot.ref);
+                } catch (imgError: any) {
+                    console.error("Image upload error:", imgError);
+                    toast.error("画像のアップロードに失敗しました。画像なしで出品しますか？", { duration: 4000 });
+                    // Continue without image for fallback, or we can throw. Let's continue without image.
+                }
             }
 
             await createItem({
@@ -255,35 +259,13 @@ export default function CreateListingPage() {
         );
     }
 
-    if (blockingReason === 'payout_missing') {
-        return (
-            <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
-                <Card className="max-w-md w-full shadow-lg border-blue-100">
-                    <CardHeader className="bg-blue-50 rounded-t-lg">
-                        <CardTitle className="text-blue-800 flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-600" />
-                            受取口座の登録が必要です
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-6 space-y-4">
-                        <p className="text-slate-600 leading-relaxed">
-                            売上を受け取るための銀行口座が登録されていません。これを行わないと出品できません。
-                        </p>
-                        <Button className="w-full font-bold bg-blue-600 hover:bg-blue-700" onClick={() => router.push('/seller/payout')}>
-                            口座登録ページへ進む
-                        </Button>
-                        <Link href="/items">
-                            <Button variant="ghost" className="w-full mt-2">戻る</Button>
-                        </Link>
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
+
 
     return (
         <div className="min-h-screen bg-slate-50 py-6 px-4 pb-20 md:py-10">
+            <OnboardingModal />
             <div className="max-w-2xl mx-auto space-y-6">
+
                 <div className="flex items-center justify-between">
                     <h1 className="text-xl md:text-2xl font-bold text-slate-800">商品を出品する</h1>
                     <Link href="/items">
@@ -413,7 +395,16 @@ export default function CreateListingPage() {
                                 <Label htmlFor="price" className="font-bold text-slate-700">販売価格 (円) *</Label>
                                 <div className="relative">
                                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">¥</div>
-                                    <Input id="price" name="price" type="number" className="pl-8 text-xl font-bold tracking-tight" placeholder="1000" min="0" required />
+                                    <Input 
+                                        id="price" 
+                                        name="price" 
+                                        type="number" 
+                                        className="pl-8 text-xl font-bold tracking-tight" 
+                                        placeholder="1000" 
+                                        min="0" 
+                                        required 
+                                        onWheel={(e) => e.currentTarget.blur()}
+                                    />
                                 </div>
                                 <p className="text-xs text-slate-500">※手数料は購入者が負担します。</p>
                             </div>
