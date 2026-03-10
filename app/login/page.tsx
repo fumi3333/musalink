@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { sendLoginLink } from "@/lib/auth";
+import { ALLOWED_DOMAIN } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
 import { LogIn } from "lucide-react";
 
 function LoginContent() {
@@ -12,6 +16,28 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectParams = searchParams.get("redirect");
+
+  const [email, setEmail] = useState("");
+  const [isSendingLink, setIsSendingLink] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
+
+  const handleSendLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+        toast.error(`武蔵野大学のメールアドレス（@${ALLOWED_DOMAIN}）を入力してください。`);
+        return;
+    }
+    setIsSendingLink(true);
+    try {
+        await sendLoginLink(email.trim());
+        setLinkSent(true);
+        toast.success("ログイン用のリンクを送信しました。受信トレイをご確認ください。");
+    } catch (error: any) {
+        toast.error(error.message || "リンクの送信に失敗しました。");
+    } finally {
+        setIsSendingLink(false);
+    }
+  };
 
   useEffect(() => {
     if (user && !loading) {
@@ -59,7 +85,48 @@ function LoginContent() {
             Googleでログイン
           </Button>
 
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-slate-50 px-2 text-slate-500">
+                または
+              </span>
+            </div>
+          </div>
 
+          {!linkSent ? (
+              <form onSubmit={handleSendLink} className="space-y-3">
+                <p className="text-xs text-slate-500 text-center mb-2">Googleログインができない場合（大学メール向け）</p>
+                <Input 
+                    type="email" 
+                    placeholder={`...@${ALLOWED_DOMAIN}`} 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="bg-white"
+                />
+                <Button 
+                    type="submit" 
+                    variant="outline" 
+                    className="w-full border-violet-200 hover:bg-violet-50 text-violet-700"
+                    disabled={isSendingLink}
+                >
+                    {isSendingLink ? "送信中..." : "ログインリンクをメールで送信"}
+                </Button>
+              </form>
+          ) : (
+              <div className="p-4 bg-green-50/50 text-green-800 rounded-lg text-sm text-center border border-green-200">
+                  <p className="font-medium mb-1">リンクを送信しました</p>
+                  <p className="text-xs text-green-700 mb-3 opacity-90">
+                    「{email}」の受信トレイからURLをクリックしてログインを完了してください。
+                  </p>
+                  <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-green-700 hover:text-green-800 hover:bg-green-50 border-green-200" onClick={() => setLinkSent(false)}>
+                    戻る
+                  </Button>
+              </div>
+          )}
 
           <div className="my-6 p-4 bg-slate-50 rounded text-[10px] text-slate-500 leading-relaxed border border-slate-200">
               <p className="font-bold mb-1">【重要事項・免責】</p>
