@@ -30,7 +30,6 @@ import { stripePromise } from '@/lib/stripe';
 import StripePaymentForm from './StripePaymentForm';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
-import { ChatRoom } from '@/components/chat/ChatRoom';
 import { QRCodeGenerator } from './QRCodeGenerator';
 import { QRCodeScanner } from './QRCodeScanner';
 
@@ -645,13 +644,6 @@ Musalinkで連絡先を確認しました。
                     </CardContent>
                 </Card>
             )}
-
-            {/* --- Chat Room (Available in all phases) --- */}
-            <ChatRoom
-                transactionId={transaction.id}
-                buyerId={transaction.buyer_id}
-                sellerId={transaction.seller_id}
-            />
         </div>
     );
 };
