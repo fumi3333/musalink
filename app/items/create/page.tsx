@@ -71,6 +71,13 @@ export default function CreateListingPage() {
                     return;
                 }
 
+                // Determine if Payout is configured
+                if (!authUserData.charges_enabled && !authUserData.is_demo) {
+                    setBlockingReason('payout_missing');
+                    setCurrentUser(authUserData);
+                    return;
+                }
+
                 // All Good
                 setBlockingReason(null);
                 setCurrentUser(authUserData);
@@ -249,6 +256,33 @@ export default function CreateListingPage() {
                         </p>
                         <Button className="w-full font-bold" onClick={() => router.push('/verify')}>
                             本人確認ページへ進む
+                        </Button>
+                        <Link href="/items">
+                            <Button variant="ghost" className="w-full mt-2">戻る</Button>
+                        </Link>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    if (blockingReason === 'payout_missing') {
+        return (
+            <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
+                <Card className="max-w-md w-full shadow-lg border-violet-100">
+                    <CardHeader className="bg-violet-50 rounded-t-lg">
+                        <CardTitle className="text-violet-800 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-violet-600" />
+                            口座設定が必要です
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6 space-y-4">
+                        <p className="text-slate-600 leading-relaxed">
+                            出品を行うには、売上金を受け取るための口座設定（Stripe Connect）が必要です。<br/>
+                            テスト環境（Sandbox）の場合は、スキップボタンでテスト情報を自動入力して設定を完了させてください。
+                        </p>
+                        <Button className="w-full font-bold" onClick={() => router.push('/seller/payout')}>
+                            口座設定ページへ進む
                         </Button>
                         <Link href="/items">
                             <Button variant="ghost" className="w-full mt-2">戻る</Button>
