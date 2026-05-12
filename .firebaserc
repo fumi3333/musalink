@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "musa-link"
+    "default": "musa-link",
+    "production": "musa-link-prod"
   }
 }
