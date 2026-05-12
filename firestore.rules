@@ -12,13 +12,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Helper: Enforce University Email (or specific Demo/Admin accounts)
+    // Helper: Enforce University Email
+    // SECURITY: Anonymous auth and demo bypass removed before production launch (2026-05-13)
     function isVerifiedStudent() {
        return isAuthenticated() && (
          request.auth.token.email.matches('.*@stu\\.musashino-u\\.ac\\.jp$') ||
-         request.auth.token.email.matches('.*@musashino-u\\.ac\\.jp$') ||
-         request.auth.token.email == 'demo@musashino-u.ac.jp' ||
-         request.auth.token.firebase.sign_in_provider == 'anonymous'
+         request.auth.token.email.matches('.*@musashino-u\\.ac\\.jp$')
        );
     }
 

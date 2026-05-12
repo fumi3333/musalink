@@ -92,12 +92,47 @@ export default function PrivacyPage() {
                     </CardContent>
                 </Card>
 
-                {/* 第5条 */}
+                {/* 第6条 */}
                 <Card className="border-none shadow-sm bg-white">
                     <CardContent className="p-6">
                         <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
                             <Lock className="w-5 h-5 text-blue-500" />
-                            第5条（お問い合わせ）
+                            第6条（個人情報の保管期間）
+                        </h2>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            当サービスは、利用目的の達成に必要な範囲内で個人情報を保管します。<br />
+                            ユーザーが退会した場合、法令上の保管義務がある場合（会計帳簿等）を除き、<strong>退会後90日以内に個人情報を削除</strong>します。<br />
+                            ただし、不正行為の調査・対応のため、取引完了後の取引記録は取引完了から1年間保管することがあります。
+                        </p>
+                    </CardContent>
+                </Card>
+
+                {/* 第7条 */}
+                <Card className="border-none shadow-sm bg-white">
+                    <CardContent className="p-6">
+                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+                            <Eye className="w-5 h-5 text-blue-500" />
+                            第7条（アクセス解析・Cookieについて）
+                        </h2>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            当サービスはGoogle Firebase Analyticsを使用しており、ユーザーのアクセスデータ（IPアドレス・閲覧ページ・滞在時間等）を収集・分析しています。
+                            このデータはGoogleのプライバシーポリシーに基づき管理され、ユーザー個人を特定するために使用することはありません。<br />
+                            <br />
+                            また、当サービスはセッション管理・認証のためにCookieを使用しています。ブラウザの設定でCookieを無効にした場合、一部の機能が正常に動作しないことがあります。<br />
+                            <br />
+                            <span className="text-xs text-slate-400">
+                                Googleのプライバシーポリシー: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-500">https://policies.google.com/privacy</a>
+                            </span>
+                        </p>
+                    </CardContent>
+                </Card>
+
+                {/* 第8条（旧第5条） */}
+                <Card className="border-none shadow-sm bg-white">
+                    <CardContent className="p-6">
+                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+                            <Lock className="w-5 h-5 text-blue-500" />
+                            第8条（お問い合わせ）
                         </h2>
                         <p className="text-sm text-slate-600 leading-relaxed">
                             本ポリシーに関するお問い合わせは、以下の窓口までお願いいたします。<br />

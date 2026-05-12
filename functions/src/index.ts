@@ -911,8 +911,9 @@ export const stripeWebhook = functions.https.onRequest(async (req: functions.htt
         if (!sig || !endpointSecret) throw new Error("Missing signature or secret");
         event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
     } catch (err: any) {
-        console.error(`Webhook Error: ${err.message}`);
-        res.status(400).send(`Webhook Error: ${err.message}`);
+        // SECURITY: Do not expose internal error details in response body (2026-05-13)
+        console.error(`Webhook signature verification failed: ${err.message}`);
+        res.status(400).send('Bad Request');
         return;
     }
 
