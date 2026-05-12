@@ -135,7 +135,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                         } else {
                             // First time login - Create Skeleton
-                            // ... (Logic omitted for brevity, but should respect split)
+                            const email = firebaseUser.email || "";
+                            const universityId = getUniversityFromEmail(email);
+                            const derivedGrade = calculateGrade(email);
+
+                            const newPublicData = {
+                                isProfileComplete: false,
+                                is_verified: true,
+                                universityId: universityId || "不明",
+                                grade: derivedGrade !== "不明" ? derivedGrade : "不明",
+                                departmentId: "不明",
+                                trust_score: 5.0,
+                                created_at: new Date()
+                            };
+
+                            const newPrivateData = {
+                                email: email,
+                            };
+
+                            await setDoc(userRef, newPublicData);
+                            await setDoc(privateRef, newPrivateData);
+
+                            setUserData({ ...newPublicData, ...newPrivateData, id: firebaseUser.uid });
                         }
                     } catch (e: any) {
                         console.warn("Fetch user data error:", e);

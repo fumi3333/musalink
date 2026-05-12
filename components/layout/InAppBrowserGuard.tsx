@@ -3,9 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const InAppBrowserGuard = ({ children }: { children: React.ReactNode }) => {
     const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+    const { user, loading } = useAuth();
 
     useEffect(() => {
         // Detect common in-app browsers (LINE, Instagram, Facebook, TikTok)
@@ -20,7 +22,13 @@ export const InAppBrowserGuard = ({ children }: { children: React.ReactNode }) =
         }
     }, []);
 
-    if (isInAppBrowser) {
+    // Do not show guard if still checking auth state to prevent flash
+    if (loading) {
+        return <>{children}</>;
+    }
+
+    // Only show guard if the user is NOT logged in
+    if (isInAppBrowser && !user) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 text-center">
                 <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full space-y-6">

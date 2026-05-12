@@ -305,7 +305,7 @@ export const cancelStaleTransactions = functions.pubsub.schedule("every 60 minut
         batch.update(doc.ref, {
             status: "cancelled",
             cancelledAt: now,
-            cancellationReason: "auto_timeout_24h"
+            cancel_reason: "auto_timeout_24h"
         });
 
         // 3. Item Status -> listing (再出品)
@@ -1037,7 +1037,7 @@ export const adminCancelTransaction = functions.https.onCall(async (data, contex
             t.update(txRef, {
                 status: 'cancelled',
                 cancelledAt: admin.firestore.Timestamp.now(),
-                cancellationReason: reason || "admin_force_cancel",
+                cancel_reason: reason || "admin_force_cancel",
                 stripeActionTaken: stripeAction // Audit log
             });
 
