@@ -66,7 +66,7 @@ export const onTransactionCreated = functions.firestore
         const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
         const subject = `【Musalink】商品「${itemTitle}」が購入されました！`;
-        const text = `${seller.display_name}様\n\nあなたの出品した「${itemTitle}」に購入リクエストが入りました！\n\nアプリを開いて確認・承認してください。\nhttps://musa-link.web.app/transactions/detail?id=${context.params.transactionId}`;
+        const text = `${seller.display_name}様\n\nあなたの出品した「${itemTitle}」に購入リクエストが入りました！\n\nアプリを開いて確認・承認してください。\nhttps://musa-link.web.app/transactions/detail?id=${context.params.transactionId}&openExternalBrowser=1`;
 
         // 1. Create In-App Notification
         await db.collection("users").doc(sellerId).collection("notifications").add({
@@ -113,7 +113,7 @@ export const onMessageCreated = functions.firestore
 
         const msgPreview = (msg.text || '(メディア)').substring(0, 50);
         const subject = `【Musalink】新着メッセージが届きました`;
-        const text = `${recipient.display_name}様\n\n取引相手からメッセージが届きました。\n\n「${msgPreview}${(msg.text || '').length > 50 ? '...' : ''}」\n\n返信はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${conversationId}#chat`;
+        const text = `${recipient.display_name}様\n\n取引相手からメッセージが届きました。\n\n「${msgPreview}${(msg.text || '').length > 50 ? '...' : ''}」\n\n返信はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${conversationId}&openExternalBrowser=1#chat`;
 
         // 1. Create In-App Notification
         await db.collection("users").doc(recipientId).collection("notifications").add({
@@ -157,7 +157,7 @@ export const onTransactionUpdated = functions.firestore
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
             const subject = `【Musalink】購入リクエストが承認されました！`;
-            const text = `${buyer.display_name}様\n\n「${itemTitle}」の購入リクエストが承認されました。\n\n以下のリンクから支払いを完了させてください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}`;
+            const text = `${buyer.display_name}様\n\n「${itemTitle}」の購入リクエストが承認されました。\n\n以下のリンクから支払いを完了させてください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
             // In-App
             await db.collection("users").doc(buyerId).collection("notifications").add({
@@ -189,7 +189,7 @@ export const onTransactionUpdated = functions.firestore
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
             const subject = `【Musalink】支払いが完了しました（${itemTitle}）`;
-            const text = `${seller.display_name}様\n\n「${itemTitle}」の支払いが完了し、取引が成立しました。\n\n購入者と連絡を取り、商品の受け渡しを行ってください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}`;
+            const text = `${seller.display_name}様\n\n「${itemTitle}」の支払いが完了し、取引が成立しました。\n\n購入者と連絡を取り、商品の受け渡しを行ってください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
             // In-App
             await db.collection("users").doc(sellerId).collection("notifications").add({
@@ -235,7 +235,7 @@ export const onTransactionUpdated = functions.firestore
                 reasonText = "取引相手、または運営によってキャンセル処理が行われました。";
             }
 
-            const text = `「${itemTitle}」の取引がキャンセルされました。\n\n理由: ${reasonText}\n\n詳細はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}`;
+            const text = `「${itemTitle}」の取引がキャンセルされました。\n\n理由: ${reasonText}\n\n詳細はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
             // Buyer In-App & Email
             if (buyer) {
