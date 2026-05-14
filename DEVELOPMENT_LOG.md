@@ -74,3 +74,26 @@
 
 ---
 
+### 2026年5月14日 (木)
+本日、対面でのQRコードスキャンおよびStripe決済・Cloud Functionsの非同期処理に存在していた8つの重大なバグ・欠陥をすべて修正し、決済フローの堅牢化を完了しました。
+
+#### 🛠️ 【決済・取引フローの不具合修正】QRスキャナー・ステータス遷移の堅牢化
+* **対象ファイル**:
+  * [functions/src/index.ts](file:///c:/musashino%20link/functions/src/index.ts) (Cloud Functions 決済ロジック)
+  * [components/transaction/QRCodeScanner.tsx](file:///c:/musashino%20link/components/transaction/QRCodeScanner.tsx) (QR読み取りスキャナー)
+  * [components/transaction/StripePaymentForm.tsx](file:///c:/musashino%20link/components/transaction/StripePaymentForm.tsx) (Stripe決済フォーム)
+  * [components/transaction/TransactionDetailView.tsx](file:///c:/musashino%20link/components/transaction/TransactionDetailView.tsx) (取引詳細画面UI)
+* **対応内容**:
+  1. **QRスキャナー二重発火・カメラ起動不可の防止**: `QRCodeScanner.tsx` を全面的に書き換え。React 18の StrictMode による二重マウントを考慮したインスタンス管理と、`useRef` を用いたクロージャ・古いstateの参照バグを修正。さらにスキャン成功時にDOM要素を削除すると `scanner.clear()` がクラッシュする問題を回避するため、コンテナをCSS（`hidden`）で維持する設計に変更。
+  2. **Webhook/非同期処理のステータス不整合修正**: `functions/src/index.ts` の `processUnlock` にて、ステータスが `payment_pending` 時にも正しくアンロック処理へ進めるように条件を拡張。
+  3. **金額表示の動的化**: `StripePaymentForm.tsx` に `amount` プロパティを追加し、「100円を支払う」という固定表示から、実際の商品価格を反映した表示へ修正（景表法・ユーザー保護の遵守）。
+  4. **自動キャンセルの対象ステータス修正**: 定期実行バッチ `cancelStaleTransactions` が対象とするステータスリストに `request_sent`, `approved`, `payment_pending` を設定。
+  5. **フォールバック処理の完全化**: `unlockTransaction` に `stripe.paymentIntents.capture()` と個人情報アンロックのロジックを追加し、手動完了時にも確実に売上が確定するように強化。
+  6. **QRコード生成の安定化**: `TransactionDetailView.tsx` のQR生成において `nonce: Date.now()` を排除し `useMemo` で安定化。画面更新によるQRのチラつき・読み取り失敗を防止。
+  7. **デバッグボタンの本番隠蔽**: 強制完了ボタンを `process.env.NODE_ENV === 'development'` で囲み、本番環境への露出を完全遮断。
+  8. **手数料記録の徹底**: `capturePayment` および `processUnlock` 内で商品価格を取得し、確定時のデータベース更新に `fee_amount` を必ず記録するように修正。
+  9. **QR読み取りエラー時の自動リカバリー機能**: 無効なQRコードを誤スキャンした場合や、キャンパス内での通信エラーが発生した際に、カメラと画面がフリーズして進行不能になるUXの欠陥を発見。エラー表示後に自動でコンポーネントを再起動（`scanKey`をインクリメント）させ、リロードなしで即座に再スキャンできる自己復帰処理を実装。
+* **効果**: 学生がキャンパスで対面取引を行う際、確実にカメラが起動し、1回のスキャンで決済と個人情報のアンロックがセキュアかつスムーズに完了する本番品質のフローを確立しました。
+
+---
+

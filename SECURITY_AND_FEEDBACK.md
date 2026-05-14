@@ -171,3 +171,26 @@ function isVerifiedStudent() {
 | Stripe Connect 未成年 | Stripe 本番要件の確認と案内の整備を推奨 |
 
 `firestore.rules` の主要な穴（誰でも他人の商品を書き換えられる・非公開データを読める等）はなく、**ドメイン制限と private_data の分離は Rules で担保されている**状態です。上記の `payout_requests` 修正と、デプロイ方式の確認をすれば、リリースに向けた安心度はさらに高まります。
+
+---
+
+## 4. 全プロジェクト共通のセキュリティガイドライン (ZAXからの教訓)
+
+過去プロジェクト(ZAX)で得られた知見から、以下のルールをすべてのプロジェクトで遵守すること。
+
+### ① .git/hooks/pre-commit による危険コードブロック
+`scripts/check-secrets.js` および `scripts/security-check.js` を用いて、ハードコードされたパスワードや脆弱なパターンの混入をコミット時に自動ブロックする。（設定済み）
+
+### ② ユーザー生成のファクトリー化
+ユーザーを作成する際は直接の `prisma.create` （または Firebase での直書き）を禁止し、必ず `lib/auth/user-factory.ts` を経由すること。
+- ハードコードのフォールバックは絶対に行わない。
+- ゲストなどの自動ユーザー生成時は推測不可能なパスワード(`randomBytes(32).toString('hex')`等)を使用する。
+
+### ③ APIデータ返却時の最小権限原則
+APIでクライアントにデータを返す際は、**本当に必要なデータ以外は徹底的に削ぎ落とす**こと。
+- ❌ `contactEmail: "ハッシュ化文字列"` (ハッシュ値でも「持っている」という情報が漏洩する)
+- ✅ `hasEmail: true / false` (フラグのみ返す)
+
+### ④ Supabase使用時のRLS (Row Level Security) 必須化
+※ 本プロジェクトは Firebase (Firestore Rules) を使用していますが、将来的に Supabase を採用する場合は、**テーブル作成とセットで必ずRLSポリシーのSQLを書くこと**。
+- Prisma はあくまでアプリケーション層のガードであり、Supabase (PostgREST API) の穴は RLS でしか塞げない。

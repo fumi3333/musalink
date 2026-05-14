@@ -1,1 +1,2 @@
 npm run check-secrets
+node scripts/security-check.js

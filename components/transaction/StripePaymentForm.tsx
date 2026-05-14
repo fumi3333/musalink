@@ -15,10 +15,11 @@ import { toast } from 'sonner';
 interface StripePaymentFormProps {
     transactionId: string;
     userId: string;
+    amount: number;
     onSuccess: () => void;
 }
 
-export default function StripePaymentForm({ transactionId, userId, onSuccess }: StripePaymentFormProps) {
+export default function StripePaymentForm({ transactionId, userId, amount, onSuccess }: StripePaymentFormProps) {
     const stripe = useStripe();
     const elements = useElements();
     const [message, setMessage] = useState<string | null>(null);
@@ -79,7 +80,7 @@ export default function StripePaymentForm({ transactionId, userId, onSuccess }: 
         <form onSubmit={handleSubmit} className="space-y-4">
             <PaymentElement />
             <Button disabled={isLoading || !stripe || !elements} className="w-full font-bold bg-violet-600 hover:bg-violet-700">
-                {isLoading ? "処理中..." : "100円を支払う"}
+                {isLoading ? "処理中..." : `${amount}円を支払う`}
             </Button>
             {message && <div className="text-sm text-red-500 font-bold">{message}</div>}
         </form>

@@ -262,7 +262,7 @@ export const cancelStaleTransactions = functions.pubsub.schedule("every 60 minut
     // 対象: 24時間以上更新がなく、かつ完了していないステータスの取引
     // Note: 複合インデックスが必要になる場合があります
     const snapshot = await db.collection("transactions")
-        .where("status", "in", ["matching", "payment_pending"])
+        .where("status", "in", ["request_sent", "approved", "payment_pending"])
         .where("updatedAt", "<=", cutoffTime)
         .get();
 
@@ -356,8 +356,8 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
     }
 
     // Check Status
-    if (tx.status !== 'approved') {
-        throw new functions.https.HttpsError('failed-precondition', 'Transaction must be in approved status.');
+    if (tx.status !== 'approved' && tx.status !== 'payment_pending') {
+        throw new functions.https.HttpsError('failed-precondition', `Transaction must be in approved or payment_pending status. Current: ${tx.status}`);
     }
 
     // Buyer verification is implicit if payment succeeded for this transaction
@@ -374,8 +374,13 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
         universityEmail = privateData.university_email || privateData.email || universityEmail;
     }
 
+    // Get item price to calculate fee
+    const itemRef = db.collection("items").doc(tx.item_id);
+    const itemDoc = await t.get(itemRef);
+    const itemPrice = itemDoc.exists ? itemDoc.data()!.price : 0;
+
     // 2. Unlock & Update Transaction
-    const feeAmount = calculateFee(tx.price || 0);
+    const feeAmount = calculateFee(itemPrice);
     t.update(txRef, {
         status: 'completed',
         fee_amount: feeAmount,
@@ -592,8 +597,15 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
                     universityEmail = pd.university_email;
                 }
 
+                // Get item price to calculate fee
+                const itemRef = db.collection("items").doc(tx.item_id);
+                const itemDoc = await t.get(itemRef);
+                const itemPrice = itemDoc.exists ? itemDoc.data()!.price : 0;
+                const feeAmount = calculateFee(itemPrice);
+
                 t.update(txRef, {
                     status: 'completed',
+                    fee_amount: feeAmount,
                     unlocked_assets: {
                         student_id: studentId,
                         university_email: universityEmail,
@@ -667,17 +679,46 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
         const tx = txDoc.data()!;
 
         // Security: Check if caller is involved in transaction?
-        // Security: Check if caller is involved in transaction?
         if (tx.buyer_id !== callerId && tx.seller_id !== callerId) {
              console.warn(`Unlock attempt by unrelated user: ${callerId} for tx: ${transactionId}`);
              res.status(403).json({ error: 'Permission denied: You are not a participant in this transaction.' });
              return;
         }
 
+        // If payment intent exists and it's payment_pending, try to capture
+        if (tx.payment_intent_id && tx.status === 'payment_pending') {
+            try {
+                await stripe.paymentIntents.capture(tx.payment_intent_id);
+            } catch (stripeErr: any) {
+                console.error("[unlockTransaction] Stripe Capture Failed", stripeErr);
+                if (stripeErr.code !== 'payment_intent_unexpected_state') {
+                     res.status(500).json({ error: `Stripe Error: ${stripeErr.message}` });
+                     return;
+                }
+            }
+        }
+
+        // Get Seller info for Unlock
+        const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
+        const sellerPrivateDoc = await sellerPrivateRef.get();
+        
+        let studentId = "unknown";
+        let universityEmail = "unknown";
+        if (sellerPrivateDoc.exists) {
+            const pd = sellerPrivateDoc.data()!;
+            studentId = pd.student_id;
+            universityEmail = pd.university_email;
+        }
+
         // Update status to 'completed'
         await txRef.update({
             status: 'completed',
-            unlockedAt: admin.firestore.Timestamp.now()
+            unlocked_assets: {
+                student_id: studentId,
+                university_email: universityEmail,
+                unlockedAt: admin.firestore.Timestamp.now()
+            },
+            updatedAt: admin.firestore.Timestamp.now()
         });
 
         res.status(200).json({ success: true, message: 'Transaction unlocked' });

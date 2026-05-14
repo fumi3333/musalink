@@ -238,7 +238,7 @@ exports.cancelStaleTransactions = functions.pubsub.schedule("every 60 minutes").
     // 対象: 24時間以上更新がなく、かつ完了していないステータスの取引
     // Note: 複合インデックスが必要になる場合があります
     const snapshot = await db.collection("transactions")
-        .where("status", "in", ["matching", "payment_pending"])
+        .where("status", "in", ["request_sent", "approved", "payment_pending"])
         .where("updatedAt", "<=", cutoffTime)
         .get();
     if (snapshot.empty) {
@@ -276,7 +276,7 @@ exports.cancelStaleTransactions = functions.pubsub.schedule("every 60 minutes").
         batch.update(doc.ref, {
             status: "cancelled",
             cancelledAt: now,
-            cancellationReason: "auto_timeout_24h"
+            cancel_reason: "auto_timeout_24h"
         });
         // 3. Item Status -> listing (再出品)
         if (tx.item_id) {
@@ -314,8 +314,8 @@ async function processUnlock(transactionId, userId, paymentIntentId, t) {
         return { success: true, message: "Transaction already unlocked." };
     }
     // Check Status
-    if (tx.status !== 'approved') {
-        throw new functions.https.HttpsError('failed-precondition', 'Transaction must be in approved status.');
+    if (tx.status !== 'approved' && tx.status !== 'payment_pending') {
+        throw new functions.https.HttpsError('failed-precondition', `Transaction must be in approved or payment_pending status. Current: ${tx.status}`);
     }
     // Buyer verification is implicit if payment succeeded for this transaction
     // Get Seller info for Unlock（個人情報は private_data のみから取得）
@@ -328,8 +328,12 @@ async function processUnlock(transactionId, userId, paymentIntentId, t) {
         studentId = privateData.student_id || privateData.email || studentId;
         universityEmail = privateData.university_email || privateData.email || universityEmail;
     }
+    // Get item price to calculate fee
+    const itemRef = db.collection("items").doc(tx.item_id);
+    const itemDoc = await t.get(itemRef);
+    const itemPrice = itemDoc.exists ? itemDoc.data().price : 0;
     // 2. Unlock & Update Transaction
-    const feeAmount = (0, utils_1.calculateFee)(tx.price || 0);
+    const feeAmount = (0, utils_1.calculateFee)(itemPrice);
     t.update(txRef, {
         status: 'completed',
         fee_amount: feeAmount,
@@ -523,8 +527,14 @@ exports.capturePayment = functions.https.onCall(async (data, context) => {
                 studentId = pd.student_id;
                 universityEmail = pd.university_email;
             }
+            // Get item price to calculate fee
+            const itemRef = db.collection("items").doc(tx.item_id);
+            const itemDoc = await t.get(itemRef);
+            const itemPrice = itemDoc.exists ? itemDoc.data().price : 0;
+            const feeAmount = (0, utils_1.calculateFee)(itemPrice);
             t.update(txRef, {
                 status: 'completed',
+                fee_amount: feeAmount,
                 unlocked_assets: {
                     student_id: studentId,
                     university_email: universityEmail,
@@ -594,16 +604,43 @@ exports.unlockTransaction = functions.https.onRequest(async (req, res) => {
         }
         const tx = txDoc.data();
         // Security: Check if caller is involved in transaction?
-        // Security: Check if caller is involved in transaction?
         if (tx.buyer_id !== callerId && tx.seller_id !== callerId) {
             console.warn(`Unlock attempt by unrelated user: ${callerId} for tx: ${transactionId}`);
             res.status(403).json({ error: 'Permission denied: You are not a participant in this transaction.' });
             return;
         }
+        // If payment intent exists and it's payment_pending, try to capture
+        if (tx.payment_intent_id && tx.status === 'payment_pending') {
+            try {
+                await stripe.paymentIntents.capture(tx.payment_intent_id);
+            }
+            catch (stripeErr) {
+                console.error("[unlockTransaction] Stripe Capture Failed", stripeErr);
+                if (stripeErr.code !== 'payment_intent_unexpected_state') {
+                    res.status(500).json({ error: `Stripe Error: ${stripeErr.message}` });
+                    return;
+                }
+            }
+        }
+        // Get Seller info for Unlock
+        const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
+        const sellerPrivateDoc = await sellerPrivateRef.get();
+        let studentId = "unknown";
+        let universityEmail = "unknown";
+        if (sellerPrivateDoc.exists) {
+            const pd = sellerPrivateDoc.data();
+            studentId = pd.student_id;
+            universityEmail = pd.university_email;
+        }
         // Update status to 'completed'
         await txRef.update({
             status: 'completed',
-            unlockedAt: admin.firestore.Timestamp.now()
+            unlocked_assets: {
+                student_id: studentId,
+                university_email: universityEmail,
+                unlockedAt: admin.firestore.Timestamp.now()
+            },
+            updatedAt: admin.firestore.Timestamp.now()
         });
         res.status(200).json({ success: true, message: 'Transaction unlocked' });
     }
@@ -816,8 +853,9 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
         event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
     }
     catch (err) {
-        console.error(`Webhook Error: ${err.message}`);
-        res.status(400).send(`Webhook Error: ${err.message}`);
+        // SECURITY: Do not expose internal error details in response body (2026-05-13)
+        console.error(`Webhook signature verification failed: ${err.message}`);
+        res.status(400).send('Bad Request');
         return;
     }
     // Handle Connect Account Updates (capability_updated etc)
@@ -939,7 +977,7 @@ exports.adminCancelTransaction = functions.https.onCall(async (data, context) =>
             t.update(txRef, {
                 status: 'cancelled',
                 cancelledAt: admin.firestore.Timestamp.now(),
-                cancellationReason: reason || "admin_force_cancel",
+                cancel_reason: reason || "admin_force_cancel",
                 stripeActionTaken: stripeAction // Audit log
             });
             // 3. Revert Item Status

@@ -53,6 +53,7 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
     const [copied, setCopied] = useState(false);
     const [meetingPlace, setMeetingPlace] = useState(transaction.meeting_place || "");
     const [showSellerInfo, setShowSellerInfo] = useState(false); // Default Hidden (Privacy)
+    const [scanKey, setScanKey] = useState(0); // For forcing scanner reset
 
     let isBuyer = currentUser.id === transaction.buyer_id;
     let isSeller = currentUser.id === transaction.seller_id;
@@ -70,6 +71,11 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
 
     // システム利用料 (100 Coin)
     const feeAmount = calculateFee(item.price);
+
+    const qrValue = React.useMemo(() => JSON.stringify({ 
+        type: 'musalink_handover', 
+        txId: transaction.id
+    }), [transaction.id]);
 
     // Greeting & Copy
     const getGreetingMessage = (sellerName: string, itemName: string) => {
@@ -133,6 +139,8 @@ Musalinkで連絡先を確認しました。
                 duration: 10000,
                 description: "この画面をスクリーンショットして開発者に送ってください。"
             });
+            // Reset scanner so user can try again
+            setScanKey(prev => prev + 1);
         }
     };
 
@@ -278,6 +286,7 @@ Musalinkで連絡先を確認しました。
                                             <StripePaymentForm
                                                 transactionId={transaction.id}
                                                 userId={currentUser.id}
+                                                amount={item.price}
                                                 onSuccess={() => onStatusChange('payment_pending')} // Move state forward
                                             />
                                         </Elements>
@@ -329,11 +338,7 @@ Musalinkで連絡先を確認しました。
                                             <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-violet-600 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
                                             <div className="relative">
                                                 <QRCodeGenerator 
-                                                    value={JSON.stringify({ 
-                                                        type: 'musalink_handover', 
-                                                        txId: transaction.id,
-                                                        nonce: Date.now() // Prevent static replay if needed later
-                                                    })} 
+                                                    value={qrValue} 
                                                     size={220} 
                                                 />
                                             </div>
@@ -391,6 +396,7 @@ Musalinkで連絡先を確認しました。
 
                                     <div className="min-h-[300px] bg-black rounded-xl overflow-hidden relative border-4 border-slate-900">
                                         <QRCodeScanner 
+                                            key={scanKey}
                                             onScan={(decodedText) => {
                                                 try {
                                                     const data = JSON.parse(decodedText);
@@ -398,6 +404,7 @@ Musalinkで連絡先を確認しました。
                                                         handleCapturePayment();
                                                     } else {
                                                         toast.error("無効なQRコードです（別の取引コードの可能性があります）");
+                                                        setTimeout(() => setScanKey(prev => prev + 1), 2000);
                                                     }
                                                 } catch (e) {
                                                     // Legacy or plain text fallback
@@ -405,6 +412,7 @@ Musalinkで連絡先を確認しました。
                                                         handleCapturePayment();
                                                     } else {
                                                         toast.error("QRコードの形式が正しくありません");
+                                                        setTimeout(() => setScanKey(prev => prev + 1), 2000);
                                                     }
                                                 }
                                             }}
@@ -418,20 +426,22 @@ Musalinkで連絡先を確認しました。
                                     </div>
 
                                     {/* Debug/Fallback for Buyer */}
-                                    <div className="pt-4">
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="text-xs text-slate-400"
-                                            onClick={() => {
-                                                if(confirm("【デバッグ用】カメラなしで強制完了しますか？")) {
-                                                    handleCapturePayment();
-                                                }
-                                            }}
-                                        >
-                                            [Debug] QRなしで完了 (クリック)
-                                        </Button>
-                                    </div>
+                                    {process.env.NODE_ENV === 'development' && (
+                                        <div className="pt-4">
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="text-xs text-slate-400"
+                                                onClick={() => {
+                                                    if(confirm("【デバッグ用】カメラなしで強制完了しますか？")) {
+                                                        handleCapturePayment();
+                                                    }
+                                                }}
+                                            >
+                                                [Debug] QRなしで完了 (クリック)
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
