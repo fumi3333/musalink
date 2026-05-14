@@ -175,8 +175,39 @@ export const onTransactionUpdated = functions.firestore
             }
         }
 
+        // 1.5 Payment Pending (approved -> payment_pending) -> Notify Seller (Payment Held, ready to meet)
+        if (statusBefore === 'approved' && statusAfter === 'payment_pending') {
+            const sellerId = after.seller_id;
+            const sellerDoc = await db.collection("users").doc(sellerId).get();
+            if (!sellerDoc.exists) return;
+            const seller = sellerDoc.data()!;
+            const sellerEmail = seller.university_email || seller.email;
+
+            // Fetch Item Title
+            const itemDoc = await db.collection("items").doc(after.item_id).get();
+            const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
+
+            const subject = `【Musalink】支払いの枠確保が完了しました（${itemTitle}）`;
+            const text = `${seller.display_name}様\n\n「${itemTitle}」について、購入者がクレジットカードで支払いの仮押さえ（枠確保）を行いました。\n\nチャットで連絡を取り、キャンパス内で商品の受け渡しを行ってください。\n受け渡し時にあなたのスマホでQRコードを提示し、購入者に読み取ってもらうと売上が確定します。\n\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
+
+            // In-App
+            await db.collection("users").doc(sellerId).collection("notifications").add({
+                type: "transaction_updated",
+                title: "支払い予約完了",
+                body: `「${itemTitle}」の支払い予約が完了しました。受け渡しを行ってください。`,
+                link: `/transactions/detail?id=${transactionId}`,
+                createdAt: admin.firestore.Timestamp.now(),
+                read: false
+            });
+
+            // Email
+            if (sellerEmail) {
+                await sendEmail(sellerEmail, subject, text);
+            }
+        }
+
         // 2. Transaction Completed / Paid (any -> completed) -> Notify Seller (Payment Received)
-        // Note: 'completed' in this system means Payment is triggers unlock.
+        // Note: 'completed' in this system means Payment is captured AND handover is done.
         if (statusBefore !== 'completed' && statusAfter === 'completed') {
             const sellerId = after.seller_id;
             const sellerDoc = await db.collection("users").doc(sellerId).get();
@@ -188,14 +219,14 @@ export const onTransactionUpdated = functions.firestore
             const itemDoc = await db.collection("items").doc(after.item_id).get();
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
-            const subject = `【Musalink】支払いが完了しました（${itemTitle}）`;
-            const text = `${seller.display_name}様\n\n「${itemTitle}」の支払いが完了し、取引が成立しました。\n\n購入者と連絡を取り、商品の受け渡しを行ってください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
+            const subject = `【Musalink】商品の受け渡し・売上確定が完了しました（${itemTitle}）`;
+            const text = `${seller.display_name}様\n\n「${itemTitle}」の受け渡し（QR認証）が完了し、売上が確定しました！\nご利用ありがとうございました。\n\n詳細はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
             // In-App
             await db.collection("users").doc(sellerId).collection("notifications").add({
                 type: "transaction_updated",
-                title: "支払い完了",
-                body: `「${itemTitle}」の支払いが完了しました。受け渡しを行ってください。`,
+                title: "取引完了",
+                body: `「${itemTitle}」の受け渡しが完了し、売上が確定しました。`,
                 link: `/transactions/detail?id=${transactionId}`,
                 createdAt: admin.firestore.Timestamp.now(),
                 read: false
