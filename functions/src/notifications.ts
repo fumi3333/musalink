@@ -206,4 +206,61 @@ export const onTransactionUpdated = functions.firestore
                 await sendEmail(sellerEmail, subject, text);
             }
         }
+
+        // 3. Transaction Cancelled (any -> cancelled) -> Notify Both Parties
+        if (statusBefore !== 'cancelled' && statusAfter === 'cancelled') {
+            const cancelReason = after.cancel_reason || "ユーザーによるキャンセル";
+            
+            // Notify Buyer
+            const buyerId = after.buyer_id;
+            const buyerDoc = await db.collection("users").doc(buyerId).get();
+            const buyer = buyerDoc.exists ? buyerDoc.data()! : null;
+            const buyerEmail = buyer ? (buyer.university_email || buyer.email) : null;
+
+            // Notify Seller
+            const sellerId = after.seller_id;
+            const sellerDoc = await db.collection("users").doc(sellerId).get();
+            const seller = sellerDoc.exists ? sellerDoc.data()! : null;
+            const sellerEmail = seller ? (seller.university_email || seller.email) : null;
+
+            // Fetch Item Title
+            const itemDoc = await db.collection("items").doc(after.item_id).get();
+            const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
+
+            const subject = `【Musalink】取引がキャンセルされました（${itemTitle}）`;
+            let reasonText = "";
+            if (cancelReason === "auto_timeout_24h") {
+                reasonText = "24時間以上操作が行われなかったため、自動的にキャンセルされました。";
+            } else {
+                reasonText = "取引相手、または運営によってキャンセル処理が行われました。";
+            }
+
+            const text = `「${itemTitle}」の取引がキャンセルされました。\n\n理由: ${reasonText}\n\n詳細はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}`;
+
+            // Buyer In-App & Email
+            if (buyer) {
+                await db.collection("users").doc(buyerId).collection("notifications").add({
+                    type: "transaction_cancelled",
+                    title: "取引キャンセル",
+                    body: `「${itemTitle}」の取引がキャンセルされました。`,
+                    link: `/transactions/detail?id=${transactionId}`,
+                    createdAt: admin.firestore.Timestamp.now(),
+                    read: false
+                });
+                if (buyerEmail) await sendEmail(buyerEmail, subject, `購入者様\n\n${text}`);
+            }
+
+            // Seller In-App & Email
+            if (seller) {
+                await db.collection("users").doc(sellerId).collection("notifications").add({
+                    type: "transaction_cancelled",
+                    title: "取引キャンセル",
+                    body: `「${itemTitle}」の取引がキャンセルされました。`,
+                    link: `/transactions/detail?id=${transactionId}`,
+                    createdAt: admin.firestore.Timestamp.now(),
+                    read: false
+                });
+                if (sellerEmail) await sendEmail(sellerEmail, subject, `出品者様\n\n${text}`);
+            }
+        }
     });

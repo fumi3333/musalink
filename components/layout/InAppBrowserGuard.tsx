@@ -27,8 +27,9 @@ export const InAppBrowserGuard = ({ children }: { children: React.ReactNode }) =
         return <>{children}</>;
     }
 
-    // Only show guard if the user is NOT logged in
-    if (isInAppBrowser && !user) {
+    // Show guard if in an in-app browser, regardless of login state, 
+    // because QR code camera will fail on iOS LINE.
+    if (isInAppBrowser) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 text-center">
                 <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full space-y-6">
@@ -45,7 +46,7 @@ export const InAppBrowserGuard = ({ children }: { children: React.ReactNode }) =
                             現在、LINEやInstagramなどのアプリ内ブラウザを使用されています。
                         </p>
                         <p className="font-bold text-red-500">
-                            Googleのセキュリティ制限により、このままではログインできません。
+                            このままでは、ログインエラーが発生したり、受け渡し時のQRコード読み取り（カメラ）が起動しない問題が発生します。
                         </p>
                     </div>
 
@@ -75,8 +76,8 @@ export const InAppBrowserGuard = ({ children }: { children: React.ReactNode }) =
                         </Button>
                         
                         <p className="text-xs text-slate-500 text-center">
-                            ※ LINEのままだとGoogleログインに失敗する可能性があります。<br/>
-                            その場合は上記手順でChromeなどを開いてください。
+                            ※ LINEのままだとカメラが起動せず取引が完了できない場合があります。<br/>
+                            その場合は上記手順でSafari/Chromeを開いてください。
                         </p>
                     </div>
                 </div>
