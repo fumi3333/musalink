@@ -79,7 +79,7 @@ export default function GuidePage() {
             <div className="bg-slate-50 p-6 rounded-xl text-center">
                 <p className="text-slate-600 mb-4">解決しない場合はこちら</p>
                 <Button variant="outline" asChild>
-                    <a href="https://forms.google.com/your-form-id" target="_blank" rel="noopener noreferrer">
+                    <a href="mailto:support@musalink.jp">
                         運営にお問い合わせ
                     </a>
                 </Button>
