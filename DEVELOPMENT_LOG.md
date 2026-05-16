@@ -132,3 +132,73 @@ Stripe/JCBへコンプライアンスチェックリストを提出後、3日ほ
      * 買い手がカード枠を確保した瞬間に、出品者へ「支払いの枠確保が完了しました！チャットで連絡を取り、キャンパス内で商品の受け渡しを行ってください。」という通知を飛ばす機能を追加。
      * 取引完了時（QR読み取り後）の通知文章を「受け渡し（QR認証）が完了し、売上が確定しました！」という正しい完了メッセージに修正。
    * **効果**: これにより、テスト時および本番環境において「次に誰が何をすべきか」が明確になり、待ち合わせのすれ違いや取引の停滞を完全に防止できるようになりました。
+
+---
+
+### 2026年5月16日 (金)
+本日、Claude（AIアシスタント）と共同で**コンプライアンス・セキュリティ統合監査**を実施し、5件の重大・高リスク事項を一気に修正しました。きっかけは「『エスクロー』という用語が資金決済法リスクになり得る」「取引内チャットが電気通信事業法に抵触するため削除した」というユーザーからの法務上の懸念で、それを起点にプロジェクト全体を再点検した結果、削除が中途半端だった箇所や、過去の監査（5/13）で指摘済みだが未対応だった項目を一括処理しました。
+
+#### 0. 🗂️ 【ドキュメント整備】用語統一とCLAUDE.mdの新設
+* **対象**: `README.md`, `README_EN.md`, `CODE_REVIEW.md`, `docs/TECH_STACK_EXPLANATION.md`, `COMPLIANCE_AUDIT_2026_05_13.md`, `types/index.ts`
+* **内容**: 資金決済法リスクを避けるため、コードベース全体から「エスクロー / escrow / Escrow」の用語を排除し、「仮押さえ決済」「安全な決済フロー」等に置換。さらに、今後のClaude経由の開発で同じ事故を起こさないよう、プロジェクトルートに `CLAUDE.md` を新設し、法務レッドライン・環境ルール・IDOR防止ルール・ログ規約を明記。
+
+#### 1. 🚨 【法務】チャット機能の完全削除（電気通信事業法対応）
+* **対象**:
+  * [firestore.rules](firestore.rules:100) - `conversations/{conversationId}` および `messages/{messageId}` のルール
+  * [functions/src/notifications.ts](functions/src/notifications.ts:86) - `onMessageCreated` 関数
+  * [functions/src/notifications.ts](functions/src/notifications.ts:191) - 通知文中の「チャットで連絡を取り」表現
+  * [components/transaction/TransactionDetailView.tsx](components/transaction/TransactionDetailView.tsx:496) - 警告ダイアログ内のチャット言及
+* **対応の背景**: UI からは削除済みだったが、Firestore Rules・Cloud Functions・通知文面にチャット関連の実装と表現が残存しており、「機能停止」と法的に主張できない状態だった。
+* **対応内容**:
+  * Firestore Rules で `conversations` と `messages` を `allow read, write: if false;` に変更し、既存データへの読み書きをサーバー側で完全遮断。
+  * `onMessageCreated` 関数を削除（Cloud Functions のデプロイ時に該当関数も削除される）。
+  * 通知メールから「チャットで連絡を取り」を「取引詳細画面で受け渡し場所を確認し」に修正。
+* **効果**: 「ユーザー間の通信（メッセージング）」を提供していないことが法的・実装的に明確化され、電気通信事業法の届出義務リスクが構造的に解消される。
+
+#### 2. 🚨 【セキュリティ】Firestore Rules の Field-Level 制限導入（IDOR/整合性防止）
+* **対象**: [firestore.rules](firestore.rules:24) - `users/{userId}` の update ルール
+* **問題**: 既存ルールでは `allow update: if isOwner(userId);` のみで、ユーザーが自分自身の `trust_score`, `ratings`, `charges_enabled`, `stripe_connect_id`, `coin_balance`, `is_verified`, `is_admin` などのサーバー管理フィールドを自由に書き換え可能だった。特に `charges_enabled` を偽装すると決済フロー（`createPaymentIntent` 時の `seller.charges_enabled` 検証）を回避できる重大リスク。
+* **対応内容**:
+  * `userServerOnlyFields()` ヘルパー関数を追加し、サーバー管理フィールド一覧を列挙。
+  * `update` 時に `request.resource.data.diff(resource.data).affectedKeys().hasAny(userServerOnlyFields())` が `false` であることを必須化（=これらのフィールドへの差分があれば即座に拒否）。
+  * `create` 時も同フィールドを含むドキュメントの作成を拒否。
+  * Cloud Functions は Admin SDK 経由でルールをバイパスして書き込めるため、サーバー側ロジックには影響なし。
+* **効果**: クライアントからの信頼スコア偽装・KYC回避・管理者権限詐取などのIDOR系攻撃が構造的に不可能になった。
+
+#### 3. 🚨 【セキュリティ】Anonymous 認証バイパスの完全削除
+* **対象**: [firestore.rules](firestore.rules:66) - `transactions/{transactionId}` の create ルール
+* **問題**: 5/13に「Anonymous auth and demo bypass removed」とコメントが追加されたものの、`transactions` の create ルールには `request.auth.token.firebase.sign_in_provider == 'anonymous'` のとき `is_demo: true` な取引を許可する条件が残存していた。匿名ユーザーがデモ取引を作成できる温床。
+* **対応内容**: バイパス条件を削除し、`is_demo` フィールドは `false` または未指定のみ許可する形に変更。
+* **効果**: 匿名認証経由の不正な取引作成が遮断され、本番データへの汚染リスクが解消された。
+
+#### 4. 🛡️ 【法務】Cookie/Analytics 同意バナーの実装（電気通信事業法 第27条の12 対応）
+* **対象**:
+  * [lib/firebase.ts](lib/firebase.ts) - Firebase Analytics の遅延初期化
+  * [components/layout/CookieConsentBanner.tsx](components/layout/CookieConsentBanner.tsx) - 新規バナーコンポーネント
+  * [app/layout.tsx](app/layout.tsx) - レイアウトへの組み込み
+* **問題**: 5/13の監査で指摘されていた、Firebase Analytics をユーザー同意なしで初期化していた問題（電気通信事業法 第27条の12「Cookie等の情報送信に関する通知義務」違反のリスク）が未対応だった。
+* **対応内容**:
+  * `lib/firebase.ts` から無条件の `getAnalytics()` を撤去し、`initAnalyticsIfConsented()` 関数で localStorage の `musalink_analytics_consent === 'granted'` を確認してから初期化する形に変更。
+  * 初回訪問時に `CookieConsentBanner` を画面下部に表示。「同意する」ボタンで Analytics 初期化、「拒否」ボタンで以後トラッキングなし、選択結果は localStorage に永続化。
+* **効果**: ユーザーが Cookie/トラッキングを許諾するまで Firebase Analytics は一切起動せず、法的告知義務を満たした上で初めて計測される。
+
+#### 5. 🛡️ 【セキュリティ】管理者判定の Custom Claim 化（ハードコードメール撤廃）
+* **対象**: [functions/src/index.ts](functions/src/index.ts:1030) - `adminCancelTransaction` および [functions/src/index.ts](functions/src/index.ts:1128) - `fixSellerStatus`
+* **問題**: 管理者権限の判定が `admin@musashino-u.ac.jp` / `fumi_admin@musashino-u.ac.jp` 等のハードコードメールアドレスで行われており、当該メールが乗っ取られたら全権限を奪取される構造だった（実際の Firestore Rules 側は既に `request.auth.token.admin == true` で Custom Claim を要求する形だったが、Cloud Functions 側だけメール認証が残っていた）。
+* **対応内容**:
+  * 両関数の admin チェックを `context.auth?.token.admin === true` および `decoded.admin === true` に統一。
+  * Custom Claim は `admin.auth().setCustomUserClaims(uid, { admin: true })` を Firebase Functions Shell または Admin SDK 経由で個別に付与する運用に切替（=本番デプロイ前に明示的に管理者ユーザーへ付与する必要あり。**運用メモ参照**）。
+* **効果**: メールアドレス乗っ取りによる管理者権限奪取が不可能になり、Firestore Rules と Cloud Functions の認可ロジックが Custom Claim ベースに完全統一された。
+
+#### 📋 運用メモ・残課題
+* **デプロイ前必須作業**: `adminCancelTransaction` / `fixSellerStatus` を使う管理者ユーザーには、デプロイ前に手動で Custom Claim を付与する必要がある:
+  ```
+  // Firebase Functions Shell or Admin SDK script:
+  await admin.auth().setCustomUserClaims(uid, { admin: true });
+  ```
+  対象UIDは Firebase Console の Authentication タブから確認可能。付与漏れがあると管理者操作が全て 403 になる。
+* **Firestore Rules のデプロイ**: 今回の変更後、`firebase deploy --only firestore:rules` を必ず実行すること。Cloud Functions も `firebase deploy --only functions` で `onMessageCreated` の削除を反映させる。
+* **次の優先対応**:
+  1. プライバシーポリシーへの Cookie/Analytics 取扱いの明記（5/13監査の H-L2 として既に指摘あり、文言は監査レポート参照）
+  2. プライバシーポリシーへの保管期間明記（H-L1）
+  3. Firestore Rules のユニットテスト導入（`@firebase/rules-unit-testing` で今回の修正が二度と退行しないように）

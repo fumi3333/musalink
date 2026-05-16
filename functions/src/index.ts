@@ -1028,12 +1028,10 @@ export const beforeSignIn = functions.auth.user().beforeSignIn((user, context) =
 
 // [Admin] Force Cancel Transaction
 export const adminCancelTransaction = functions.https.onCall(async (data, context) => {
-    // 1. Admin Check
-    // In production, verify custom claim: context.auth?.token.admin === true
-    // For MVP, check specific email or just allow if authenticated (since only Admin UI calls it? No, insecure)
-    // We'll use the hardcoded email check for now to match firestore.rules
-    const email = context.auth?.token.email;
-    if (email !== "admin@musashino-u.ac.jp" && email !== "fumi_admin@musashino-u.ac.jp") {
+    // 1. Admin Check (2026-05-16: hardened to require Custom Claim)
+    // Authoritative check: context.auth.token.admin === true (set via Admin SDK setCustomUserClaims)
+    // Email-based fallback removed — even if an admin email is compromised, no admin powers without the claim.
+    if (context.auth?.token.admin !== true) {
         throw new functions.https.HttpsError('permission-denied', 'Admin only.');
     }
 
@@ -1136,8 +1134,8 @@ exports.fixSellerStatus = functions.https.onRequest(async (req, res) => {
     }
     try {
         const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
-        const adminEmails = ["admin@musashino-u.ac.jp", "fumi_admin@musashino-u.ac.jp", "hrf.mtd@gmail.com"];
-        if (!adminEmails.includes(decoded.email || '')) {
+        // 2026-05-16: hardened to require Custom Claim instead of email allowlist.
+        if (decoded.admin !== true) {
             res.status(403).send('Forbidden: Admin access only');
             return;
         }

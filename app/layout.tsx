@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 
 import { Footer } from "@/components/layout/Footer";
 import { InAppBrowserGuard } from "@/components/layout/InAppBrowserGuard"; // [New]
+import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
 
 
 export const metadata: Metadata = {
@@ -57,6 +58,7 @@ export default function RootLayout({
 
           <Footer />
           <Toaster richColors position="top-center" />
+          <CookieConsentBanner />
         </AuthProvider>
       </body>
     </html>
