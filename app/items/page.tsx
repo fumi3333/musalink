@@ -100,14 +100,19 @@ export default function ItemListView() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">全学部</SelectItem>
-                                    <SelectItem value="Law">法学部</SelectItem>
-                                    <SelectItem value="Economics">経済学部</SelectItem>
-                                    <SelectItem value="Business">経営学部</SelectItem>
-                                    <SelectItem value="Literature">文学部</SelectItem>
-                                    <SelectItem value="Education">教育学部</SelectItem>
-                                    <SelectItem value="Global">グローバル</SelectItem>
-                                    <SelectItem value="DataScience">データサイエンス</SelectItem>
-                                    <SelectItem value="Engineering">工学部</SelectItem>
+                                    <SelectItem value="文学部">文学部</SelectItem>
+                                    <SelectItem value="グローバル学部">グローバル学部</SelectItem>
+                                    <SelectItem value="法学部">法学部</SelectItem>
+                                    <SelectItem value="経済学部">経済学部</SelectItem>
+                                    <SelectItem value="経営学部">経営学部</SelectItem>
+                                    <SelectItem value="アントレプレナーシップ学部">アントレプレナーシップ学部</SelectItem>
+                                    <SelectItem value="データサイエンス学部">データサイエンス学部</SelectItem>
+                                    <SelectItem value="人間科学部">人間科学部</SelectItem>
+                                    <SelectItem value="ウェルビーイング学部">ウェルビーイング学部</SelectItem>
+                                    <SelectItem value="工学部">工学部</SelectItem>
+                                    <SelectItem value="教育学部">教育学部</SelectItem>
+                                    <SelectItem value="薬学部">薬学部</SelectItem>
+                                    <SelectItem value="看護学部">看護学部</SelectItem>
                                 </SelectContent>
                             </Select>
 

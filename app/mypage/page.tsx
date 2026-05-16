@@ -57,7 +57,6 @@ const ListingItemCard = ({ item }: { item: Item }) => {
                         <span className="text-slate-500">¥{item.price.toLocaleString()}</span>
                     </div>
                 </div>
-                {/* Replaced confusing ExternalLink with simple arrow */}
                 <div className="text-slate-300 group-hover:text-violet-500">
                     <ChevronRight className="h-5 w-5" />
                 </div>
@@ -72,7 +71,6 @@ const TransactionItemCard = ({ transaction, currentUserId }: { transaction: Tran
     const isBuyer = transaction.buyer_id === currentUserId;
 
     useEffect(() => {
-        // Fetch snapshot title if possible, or live item
         getItem(transaction.item_id).then(i => {
             if (i) setItemTitle(i.title);
             else setItemTitle("不明な商品");
@@ -96,7 +94,6 @@ const TransactionItemCard = ({ transaction, currentUserId }: { transaction: Tran
                             {isBuyer ? '購入' : '販売'}
                         </Badge>
                         <span className="text-xs text-slate-400">
-                            {/* Date formatting mock */}
                             {new Date().toLocaleDateString()}
                         </span>
                     </div>
@@ -132,7 +129,6 @@ function MyPageContent() {
     const [myTransactions, setMyTransactions] = useState<Transaction[]>([]);
     const [loadingData, setLoadingData] = useState(true);
 
-    // --- Edit Profile State ---
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editForm, setEditForm] = useState({
         display_name: "",
@@ -158,7 +154,7 @@ function MyPageContent() {
 
     useEffect(() => {
         if (!authLoading && !userData) {
-            router.push('/'); // Redirect if not logged in
+            router.push('/');
             return;
         }
 
@@ -190,51 +186,28 @@ function MyPageContent() {
 
     const activeListings = myItems.filter(i => i.status === 'listing');
     const soldListings = myItems.filter(i => i.status !== 'listing');
-
-    // Sort transactions: Active vs Completed
     const activeTx = myTransactions.filter(t => t.status !== 'completed' && t.status !== 'cancelled');
     const pastTx = myTransactions.filter(t => t.status === 'completed' || t.status === 'cancelled');
 
-    // --- Edit Profile Logic ---
-
-
-
     const handleUpdateProfile = async () => {
         if (!userData) return;
-        // toast is imported at the top
         const { updateUser } = await import('@/services/firestore');
-
         try {
             await updateUser(userData.id, editForm);
             toast.success("プロフィールを更新しました");
             setIsEditOpen(false);
-            // Ideally re-fetch or update local context. AuthContext might need a mechanism or just reload.
-            // For MVP, reload is safest to sync AuthContext
             window.location.reload();
         } catch (e) {
             toast.error("更新に失敗しました");
         }
     };
 
-    // Lazy Load removed - using top level imports
-    // const { InterestSelector } = require('@/components/profile/InterestSelector');
-    // const { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } = require('@/components/ui/dialog');
-    // const { Input } = require('@/components/ui/input');
-    // const { Label } = require('@/components/ui/label');
-
     return (
         <div className="min-h-screen bg-slate-100 pb-20">
-            {/* --- Profile Header --- */}
             <div className="bg-white p-6 shadow-sm mb-4 relative">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-                    onClick={openEdit}
-                >
+                <Button variant="ghost" size="sm" className="absolute top-4 right-4 text-slate-400 hover:text-slate-600" onClick={openEdit}>
                     編集
                 </Button>
-
                 <div className="max-w-md mx-auto flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center text-2xl overflow-hidden border-2 border-slate-100">
                         {userData?.photoURL ? (
@@ -249,8 +222,6 @@ function MyPageContent() {
                             <Star className="h-4 w-4 fill-current" />
                             <span className="font-bold text-slate-700">5.0</span>
                         </div>
-
-                        {/* Tags Display */}
                         <div className="flex flex-wrap gap-1 mt-2">
                             {userData?.is_verified && (
                                 <Badge variant="secondary" className="bg-blue-50 text-blue-700 text-[10px]">
@@ -267,38 +238,23 @@ function MyPageContent() {
                 </div>
             </div>
 
-            {/* --- Edit Modal --- */}
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>プロフィール編集</DialogTitle>
                     </DialogHeader>
-
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label>ニックネーム (表示名)</Label>
-                            <Input
-                                value={editForm.display_name}
-                                onChange={(e: any) => setEditForm({ ...editForm, display_name: e.target.value })}
-                            />
+                            <Input value={editForm.display_name} onChange={(e: any) => setEditForm({ ...editForm, display_name: e.target.value })} />
                         </div>
-
                         <div className="space-y-2">
-                            <InterestSelector
-                                selected={editForm.interests}
-                                onChange={(tags: string[]) => setEditForm({ ...editForm, interests: tags })}
-                            />
+                            <InterestSelector selected={editForm.interests} onChange={(tags: string[]) => setEditForm({ ...editForm, interests: tags })} />
                         </div>
-
                         <div className="space-y-2">
                            <Label>所属学部</Label>
-                           <Select
-                               value={editForm.department}
-                               onValueChange={(val) => setEditForm({ ...editForm, department: val })}
-                           >
-                               <SelectTrigger>
-                                   <SelectValue placeholder="学部を選択してください" />
-                               </SelectTrigger>
+                           <Select value={editForm.department} onValueChange={(val) => setEditForm({ ...editForm, department: val })}>
+                               <SelectTrigger><SelectValue placeholder="学部を選択してください" /></SelectTrigger>
                                <SelectContent>
                                    {DEPARTMENTS.map((dept) => (
                                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
@@ -307,7 +263,6 @@ function MyPageContent() {
                            </Select>
                         </div>
                     </div>
-
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditOpen(false)}>キャンセル</Button>
                         <Button onClick={handleUpdateProfile}>保存する</Button>
@@ -315,9 +270,7 @@ function MyPageContent() {
                 </DialogContent>
             </Dialog>
 
-            {/* --- Main Content --- */}
             <div className="max-w-md mx-auto px-4">
-
                 <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
                     <TabsList className="grid w-full grid-cols-3 bg-white p-1 rounded-xl shadow-sm mb-4">
                         <TabsTrigger value="selling" className="font-bold">出品した商品</TabsTrigger>
@@ -325,130 +278,81 @@ function MyPageContent() {
                         <TabsTrigger value="settings" className="font-bold">設定</TabsTrigger>
                     </TabsList>
 
-                    {/* --- Selling Tab --- */}
                     <TabsContent value="selling" className="space-y-4">
-                        <Card className="border-none shadow-none bg-transparent">
-                            <CardContent className="p-0 space-y-4">
-                                {/* Create New Button */}
-                                <Button asChild className="w-full bg-red-500 hover:bg-red-600 font-bold shadow-md text-white mb-4 py-6">
-                                    <Link href="/items/create">
-                                        <Package className="mr-2 h-5 w-5" />
-                                        出品する
-                                    </Link>
-                                </Button>
-
-                                <div className="bg-slate-50 rounded-lg overflow-hidden">
-                                    <h3 className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">出品中 ({activeListings.length})</h3>
-                                    <div className="divide-y divide-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                                        {activeListings.length > 0 ? (
-                                            activeListings.map(item => <ListingItemCard key={item.id} item={item} />)
-                                        ) : (
-                                            <div className="p-8 text-center text-slate-400 bg-white">出品中の商品はありません</div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-50 rounded-lg overflow-hidden">
-                                    <h3 className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">売却済み / 取引中 ({soldListings.length})</h3>
-                                    <div className="divide-y divide-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                                        {soldListings.length > 0 ? (
-                                            soldListings.map(item => <ListingItemCard key={item.id} item={item} />)
-                                        ) : (
-                                            <div className="p-8 text-center text-slate-400 bg-white">履歴はありません</div>
-                                        )}
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <Button asChild className="w-full bg-red-500 hover:bg-red-600 font-bold shadow-md text-white mb-4 py-6">
+                            <Link href="/items/create"><Package className="mr-2 h-5 w-5" />出品する</Link>
+                        </Button>
+                        <div className="bg-slate-50 rounded-lg overflow-hidden">
+                            <h3 className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">出品中 ({activeListings.length})</h3>
+                            <div className="divide-y divide-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                                {activeListings.length > 0 ? activeListings.map(item => <ListingItemCard key={item.id} item={item} />) : <div className="p-8 text-center text-slate-400 bg-white">出品中の商品はありません</div>}
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg overflow-hidden">
+                            <h3 className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">売却済み / 取引中 ({soldListings.length})</h3>
+                            <div className="divide-y divide-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                                {soldListings.length > 0 ? soldListings.map(item => <ListingItemCard key={item.id} item={item} />) : <div className="p-8 text-center text-slate-400 bg-white">履歴はありません</div>}
+                            </div>
+                        </div>
                     </TabsContent>
 
-                    {/* --- Purchase / Transaction Tab --- */}
                     <TabsContent value="purchase" className="space-y-4">
                         <div className="bg-slate-50 rounded-lg overflow-hidden">
                             <h3 className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">進行中の取引 ({activeTx.length})</h3>
                             <div className="divide-y divide-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                                {activeTx.length > 0 ? (
-                                    activeTx.map(tx => <TransactionItemCard key={tx.id} transaction={tx} currentUserId={userData?.id} />)
-                                ) : (
-                                    <div className="p-8 text-center text-slate-400 bg-white">進行中の取引はありません</div>
-                                )}
+                                {activeTx.length > 0 ? activeTx.map(tx => <TransactionItemCard key={tx.id} transaction={tx} currentUserId={userData?.id} />) : <div className="p-8 text-center text-slate-400 bg-white">進行中の取引はありません</div>}
                             </div>
                         </div>
-
                         <div className="bg-slate-50 rounded-lg overflow-hidden">
                             <h3 className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">過去の取引 ({pastTx.length})</h3>
                             <div className="divide-y divide-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                                {pastTx.length > 0 ? (
-                                    pastTx.map(tx => <TransactionItemCard key={tx.id} transaction={tx} currentUserId={userData?.id} />)
-                                ) : (
-                                    <div className="p-8 text-center text-slate-400 bg-white">過去の取引はありません</div>
-                                )}
+                                {pastTx.length > 0 ? pastTx.map(tx => <TransactionItemCard key={tx.id} transaction={tx} currentUserId={userData?.id} />) : <div className="p-8 text-center text-slate-400 bg-white">過去の取引はありません</div>}
                             </div>
                         </div>
                     </TabsContent>
                     
-                    {/* --- Settings Tab --- */}
                     <TabsContent value="settings">
                         <Card>
                             <CardHeader>
-                                <CardTitle>プロフィール設定</CardTitle>
-                                <CardDescription>
-                                    取引相手に表示される情報を設定します。
-                                </CardDescription>
+                                <CardTitle>アカウント設定</CardTitle>
+                                <CardDescription>各種プロフィールや受取設定を行います。</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 <div className="space-y-2">
                                     <Label htmlFor="display_name">表示名</Label>
-                                    <Input 
-                                        id="display_name" 
-                                        value={editForm.display_name} 
-                                        placeholder="ニックネームなど"
-                                        onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
-                                    />
-                                    <p className="text-xs text-slate-500">取引チャットや商品ページに表示されます。</p>
-                                    <div className="pt-2">
-                                        <Button onClick={handleSaveProfile} className="w-full md:w-auto font-bold">変更を保存</Button>
-                                    </div>
+                                    <Input id="display_name" value={editForm.display_name} onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))} />
+                                    <Button onClick={handleSaveProfile} className="mt-2 font-bold">表示名を保存</Button>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-2 pt-4 border-t">
                                     <Label>主な活動キャンパス</Label>
-                                    <RadioGroup 
-                                        defaultValue={userData?.campus || "musashino"} 
-                                        onValueChange={(val) => {
-                                            if (userData) {
-                                                updateUser(userData.id, { campus: val as any })
-                                                    .then(() => toast.success("キャンパス設定を保存しました"))
-                                                    .catch(() => toast.error("保存に失敗しました"));
-                                            }
-                                        }}
-                                        className="flex flex-col space-y-2"
-                                    >
+                                    <RadioGroup defaultValue={userData?.campus || "musashino"} onValueChange={(val) => {
+                                        if (userData) {
+                                            updateUser(userData.id, { campus: val as any })
+                                                .then(() => toast.success("キャンパス設定を保存しました"))
+                                                .catch(() => toast.error("保存に失敗しました"));
+                                        }
+                                    }} className="flex flex-col space-y-2">
                                         <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 cursor-pointer">
-                                            <RadioGroupItem value="musashino" id="camp_m" />
-                                            <Label htmlFor="camp_m" className="cursor-pointer flex-1">
-                                                <span className="font-bold block">武蔵野キャンパス</span>
-                                                <span className="text-xs text-slate-500">主に武蔵野で活動（受け渡し希望）</span>
-                                            </Label>
+                                            <RadioGroupItem value="musashino" id="camp_m" /><Label htmlFor="camp_m" className="cursor-pointer flex-1">武蔵野キャンパス</Label>
                                         </div>
                                         <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 cursor-pointer">
-                                            <RadioGroupItem value="ariake" id="camp_a" />
-                                            <Label htmlFor="camp_a" className="cursor-pointer flex-1">
-                                                <span className="font-bold block">有明キャンパス</span>
-                                                <span className="text-xs text-slate-500">主に有明で活動（受け渡し希望）</span>
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 cursor-pointer">
-                                            <RadioGroupItem value="both" id="camp_b" />
-                                            <Label htmlFor="camp_b" className="cursor-pointer flex-1">
-                                                <span className="font-bold block">両キャンパス</span>
-                                                <span className="text-xs text-slate-500">どちらでも対応可能</span>
-                                            </Label>
+                                            <RadioGroupItem value="ariake" id="camp_a" /><Label htmlFor="camp_a" className="cursor-pointer flex-1">有明キャンパス</Label>
                                         </div>
                                     </RadioGroup>
-                                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                                        ※ 取引成立後のチャットで、具体的な受け渡し場所（食堂、図書館前など）を相談してください。
+                                </div>
+
+                                <div className="pt-6 border-t border-slate-100">
+                                    <Label className="block mb-2 text-slate-900 font-bold text-sm">売上の受け取り設定</Label>
+                                    <p className="text-[10px] text-slate-500 mb-4">
+                                        商品を販売した売上を受け取るための銀行口座を設定・確認します。
                                     </p>
+                                    <Button asChild variant="outline" className="w-full border-violet-200 text-violet-700 hover:bg-violet-50 text-xs">
+                                        <Link href="/seller/payout">
+                                            <ExternalLink className="mr-2 h-3 w-3" />
+                                            受取口座を設定する (Stripe)
+                                        </Link>
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
