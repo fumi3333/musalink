@@ -111,7 +111,7 @@ export const onTransactionUpdated = functions.firestore
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
             const subject = `【Musalink】購入リクエストが承認されました！`;
-            const text = `${buyer.display_name}様\n\n「${itemTitle}」の購入リクエストが承認されました。\n\n以下のリンクから支払いを完了させてください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
+            const text = `${buyer.display_name}様\n\n「${itemTitle}」の購入リクエストが承認されました。\n\n以下のリンクから決済情報を入力し、利用枠の確保（仮押さえ）へお進みください。\n※実際の支払い確定は、対面で商品を受け取り QR コードを読み取ったタイミングで完了します。\n※24時間以内に次のステップへ進まない場合、自動的にキャンセルされます。\n\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
             // In-App
             await db.collection("users").doc(buyerId).collection("notifications").add({
@@ -142,7 +142,7 @@ export const onTransactionUpdated = functions.firestore
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
             const subject = `【Musalink】支払いの枠確保が完了しました（${itemTitle}）`;
-            const text = `${seller.display_name}様\n\n「${itemTitle}」について、購入者がクレジットカードで支払いの仮押さえ（枠確保）を行いました。\n\n取引詳細画面で受け渡し場所を確認し、キャンパス内で商品の受け渡しを行ってください。\n受け渡し時にあなたのスマホでQRコードを提示し、購入者に読み取ってもらうと売上が確定します。\n\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
+            const text = `${seller.display_name}様\n\n「${itemTitle}」について、購入者がクレジットカードで支払いの仮押さえ（枠確保）を行いました。\n\n取引詳細画面で受け渡し場所を確認し、キャンパス内で商品の受け渡しを行ってください。\n受け渡し時にあなたのスマホでQRコードを提示し、購入者に読み取ってもらうと売上が確定します。\n※24時間以内に受け渡しが完了しないと、取引は自動キャンセルされ、購入者のカード仮押さえも解除されます。\n\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
             // In-App
             await db.collection("users").doc(sellerId).collection("notifications").add({

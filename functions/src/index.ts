@@ -392,8 +392,14 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
         updatedAt: admin.firestore.Timestamp.now()
     });
 
-    // Deduct coin logic is REMOVED/SKIPPED for Direct Stripe Payment
-    // We only unlock.
+    // 3. Mark the item as sold so it disappears from listings and stays
+    // logically consistent ("matching" means still in negotiation).
+    if (itemDoc.exists) {
+        t.update(itemRef, {
+            status: 'sold',
+            updatedAt: admin.firestore.Timestamp.now()
+        });
+    }
 
     return { success: true, message: "Transaction unlocked." };
 }
@@ -613,7 +619,15 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
                     },
                     updatedAt: admin.firestore.Timestamp.now()
                 });
-                
+
+                // Mark the item as sold so it leaves the active marketplace.
+                if (itemDoc.exists) {
+                    t.update(itemRef, {
+                        status: 'sold',
+                        updatedAt: admin.firestore.Timestamp.now()
+                    });
+                }
+
                 return { success: true, mode: 'live' };
 
         });
@@ -678,10 +692,12 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
 
         const tx = txDoc.data()!;
 
-        // Security: Check if caller is involved in transaction?
-        if (tx.buyer_id !== callerId && tx.seller_id !== callerId) {
-             console.warn(`Unlock attempt by unrelated user: ${callerId} for tx: ${transactionId}`);
-             res.status(403).json({ error: 'Permission denied: You are not a participant in this transaction.' });
+        // Security (2026-05-16): Only the BUYER can unlock/complete. The seller
+        // must not be able to capture funds on their own — that's a fraud vector
+        // (seller could capture before buyer scans QR / agrees to receive).
+        if (tx.buyer_id !== callerId) {
+             console.warn(`Unlock denied: caller ${callerId} is not buyer ${tx.buyer_id} (tx: ${transactionId})`);
+             res.status(403).json({ error: 'Permission denied: Only the buyer can complete this transaction.' });
              return;
         }
 
@@ -1124,56 +1140,12 @@ async function checkRateLimit(userId: string, action: string, limit: number, win
     });
 }
 
-// [Admin] Fix Seller Status Manually (requires admin auth)
-exports.fixSellerStatus = functions.https.onRequest(async (req, res) => {
-    // Admin authentication required
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-        res.status(401).send('Unauthorized: Missing auth token');
-        return;
-    }
-    try {
-        const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
-        // 2026-05-16: hardened to require Custom Claim instead of email allowlist.
-        if (decoded.admin !== true) {
-            res.status(403).send('Forbidden: Admin access only');
-            return;
-        }
-    } catch {
-        res.status(401).send('Unauthorized: Invalid token');
-        return;
-    }
-
-    const email = req.query.email as string;
-    if (!email) {
-        res.status(400).send("Missing email query param");
-        return;
-    }
-
-    try {
-        const userRecord = await admin.auth().getUserByEmail(email);
-        const uid = userRecord.uid;
-        const userRef = db.collection('users').doc(uid);
-        const userDoc = await userRef.get();
-
-        if (!userDoc.exists) {
-            res.status(404).send(`User doc not found for ${email} (${uid})`);
-            return;
-        }
-
-        const data = userDoc.data()!;
-        await userRef.update({
-            stripe_connect_id: data.stripe_connect_id || `acct_mock_${uid}`,
-            charges_enabled: true,
-            updatedAt: admin.firestore.Timestamp.now()
-        });
-
-        res.status(200).send(`Fixed seller status for ${email} (${uid}). Charges enabled.`);
-    } catch (error: any) {
-        console.error("Fix Seller Error", error);
-        res.status(500).send(error.message);
-    }
-});
+// [Admin] fixSellerStatus REMOVED (2026-05-16) - 本番にあってはいけない dev ショートカット
+// この関数は `acct_mock_${uid}` というモックの Stripe Connect ID を生成して
+// `charges_enabled: true` を手動セットしていた。管理者であれば任意ユーザーの
+// KYC を擬似的に通せてしまうため、本番デプロイ前に削除した。
+// 復旧用途で必要になった場合は、Stripe API 経由で実際の charges_enabled を
+// 読み戻して反映する別関数として、admin allow-list 付きで作り直すこと。
 
 // [Phase 2] Notifications
 export * from "./notifications";
