@@ -150,8 +150,8 @@ export default function CreateListingPage() {
         const form = e.target as HTMLFormElement;
         const rawPrice = parseInt((form.elements.namedItem('price') as HTMLInputElement).value, 10);
 
-        if (isNaN(rawPrice) || rawPrice <= 0) {
-            toast.error("有効な価格を入力してください");
+        if (isNaN(rawPrice) || rawPrice < 300) {
+            toast.error("価格は300円以上で入力してください");
             setLoading(false);
             return;
         }
@@ -435,7 +435,7 @@ export default function CreateListingPage() {
                                         type="number" 
                                         className="pl-8 text-xl font-bold tracking-tight" 
                                         placeholder="1000" 
-                                        min="0" 
+                                        min="300" 
                                         required 
                                         onWheel={(e) => e.currentTarget.blur()}
                                     />

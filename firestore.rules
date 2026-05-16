@@ -44,9 +44,15 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isVerifiedStudent() 
                     && request.resource.data.seller_id == request.auth.uid
+                    && request.resource.data.price is int
+                    && request.resource.data.price >= 300
+                    && request.resource.data.price <= 100000
                     && request.resource.data.description.size() < 2000;
       allow update: if isAuthenticated() && (
-                      resource.data.seller_id == request.auth.uid
+                      (
+                        resource.data.seller_id == request.auth.uid
+                        && (!('price' in request.resource.data) || (request.resource.data.price is int && request.resource.data.price >= 300 && request.resource.data.price <= 100000))
+                      )
                       || (
                         // Allow Buyer to lock item (Transaction Start) — only status field
                         isVerifiedStudent() 
