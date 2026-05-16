@@ -222,7 +222,7 @@ export const onTransactionUpdated = functions.firestore
             const subject = `【Musalink】商品の受け渡し・売上確定が完了しました（${itemTitle}）`;
             const text = `${seller.display_name}様\n\n「${itemTitle}」の受け渡し（QR認証）が完了し、売上が確定しました！\nご利用ありがとうございました。\n\n詳細はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
-            // In-App
+            // 1. Notify Seller
             await db.collection("users").doc(sellerId).collection("notifications").add({
                 type: "transaction_updated",
                 title: "取引完了",
@@ -232,9 +232,34 @@ export const onTransactionUpdated = functions.firestore
                 read: false
             });
 
-            // Email
             if (sellerEmail) {
                 await sendEmail(sellerEmail, subject, text);
+            }
+
+            // 2. Notify Buyer
+            const buyerId = after.buyer_id;
+            const buyerDoc = await db.collection("users").doc(buyerId).get();
+            if (buyerDoc.exists) {
+                const buyer = buyerDoc.data()!;
+                const buyerEmail = buyer.university_email || buyer.email;
+
+                const buyerSubject = `【Musalink】「${itemTitle}」の取引が完了しました`;
+                const buyerText = `${buyer.display_name}様\n\n「${itemTitle}」の受け取り・支払いが完了しました！\nご利用ありがとうございました。\n\n詳細はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
+
+                // In-App
+                await db.collection("users").doc(buyerId).collection("notifications").add({
+                    type: "transaction_updated",
+                    title: "取引完了",
+                    body: `「${itemTitle}」の受け取りが完了しました。`,
+                    link: `/transactions/detail?id=${transactionId}`,
+                    createdAt: admin.firestore.Timestamp.now(),
+                    read: false
+                });
+
+                // Email
+                if (buyerEmail) {
+                    await sendEmail(buyerEmail, buyerSubject, buyerText);
+                }
             }
         }
 
