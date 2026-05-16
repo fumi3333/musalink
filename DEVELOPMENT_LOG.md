@@ -202,3 +202,34 @@ Stripe/JCBへコンプライアンスチェックリストを提出後、3日ほ
   1. プライバシーポリシーへの Cookie/Analytics 取扱いの明記（5/13監査の H-L2 として既に指摘あり、文言は監査レポート参照）
   2. プライバシーポリシーへの保管期間明記（H-L1）
   3. Firestore Rules のユニットテスト導入（`@firebase/rules-unit-testing` で今回の修正が二度と退行しないように）
+
+#### 6. 📜 【法務】プライバシーポリシーの整合性アップデート（同日 追加対応）
+* **対象**: [app/legal/privacy/page.tsx](app/legal/privacy/page.tsx)
+* **問題**:
+  * 第1条で「取引情報（…取引チャットの内容）」と記載があり、チャット機能削除後の実態と矛盾していた。
+  * 第7条が「Firebase Analytics を使用しています（断定）」となっていたが、Cookie同意バナー導入後は「同意を得た場合にのみ実行する」という運用に変わったため、文言が不正確だった。
+* **対応内容**:
+  * 第1条：「取引チャットの内容」を「取引ステータス、受け渡し場所等」に置換。
+  * 第7条：Firebase Analytics の利用は **明示的同意取得後にのみ初期化する** 旨を追記。同意撤回方法（お問い合わせ窓口経由）も明示。電気通信事業法 第27条の12 への対応をポリシー文面上でも明確化。
+
+#### 7. 🧪 【品質】Firestore Rules ユニットテストの土台整備
+* **対象**:
+  * [tests/rules/firestore.test.ts](tests/rules/firestore.test.ts) (新規)
+  * [tests/rules/vitest.config.ts](tests/rules/vitest.config.ts) (新規)
+  * [tests/rules/README.md](tests/rules/README.md) (新規)
+  * [package.json](package.json) - `test:rules` スクリプトと `@firebase/rules-unit-testing` / `vitest` の devDependencies 追加
+* **対応の背景**: 今回手で潰した重大バグ（チャット削除、サーバーフィールドのロックダウン、Anonymous bypass）は、テストがなければ将来うっかり退行させる可能性が高い。`@firebase/rules-unit-testing` を使った Firestore Emulator ベースのユニットテストで保護する。
+* **対応内容**: 以下のケースを実装した（合計7ケース）。
+  * `users/{uid}`: 自分の `display_name` は更新できる
+  * `users/{uid}`: 自分の `trust_score`, `charges_enabled`, `stripe_connect_id` を書き換えようとすると失敗する
+  * `conversations/{id}` の読み取り・`messages/{id}` の作成がすべて拒否される
+  * Anonymous 認証で `is_demo: true` の取引を作成できない
+  * 学内ドメインユーザーは通常の取引を作成できる
+* **実行方法**: 別ターミナルで `firebase emulators:start --only firestore` を起動した上で `pnpm test:rules` を実行する。詳細は [tests/rules/README.md](tests/rules/README.md) 参照。
+* **効果**: 今回の修正が CI でも検証可能になり、将来のリファクタリングや権限変更時に Firestore Rules の重大バグが事前検出されるようになった。
+
+#### 8. 🔒 【セキュリティ】依存パッケージ脆弱性（minimatch ReDoS）への対応
+* **対象**: [package.json](package.json) - `pnpm.overrides` に `minimatch@>=10.0.0 <10.2.3: ">=10.2.3"` を追加
+* **問題**: `pnpm audit` で High Severity の ReDoS 脆弱性（CVE-2026-27903）が ESLint の依存である `minimatch@10.2.1` に検出された。本番ランタイムには影響しないが、CI/開発環境でビルド時の DoS リスクがある。
+* **対応内容**: pnpm の overrides 機能で脆弱なバージョン範囲を `>=10.2.3` に強制的に置き換え。次回 `pnpm install --force` で全環境に反映される。
+* **残課題**: 本コミット時点では `pnpm-lock.yaml` の minimatch 10.2.1 エントリが残っているため、メイン環境で `pnpm install --force` を一度走らせてロックファイルを更新する必要あり。
