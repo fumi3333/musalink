@@ -268,6 +268,60 @@ PR `claude/peaceful-pare-9bfd59` が走っている間に、main ブランチ上
 
 ---
 
+### 2026年5月17日 (土) - デプロイ可否監査の第2ラウンドと修正
+
+5/16 にコミット 5c17477 で B1〜B3 / W1 / W4〜W6 を入れたあと、**3 並列 Explore subagent**（修正検証 / コード品質 / エッジケース）で多角的に再監査。検証は ✅ だったが、再監査で**新規ブロッカー 3 件 + 強推奨 2 件**が浮上したため、コミット 89296c9 で一気に潰した。
+
+#### 13. 🚨 【整合性】unlockTransaction にも item.status='sold' 更新を追加 (B4)
+* **対象**: [functions/src/index.ts](functions/src/index.ts) - `unlockTransaction` の完了処理
+* **問題**: W5 の対応で `capturePayment` と `processUnlock` には item を 'sold' に flip するロジックを入れたが、HTTP fallback の `unlockTransaction` だけ更新漏れ。dev の force-complete ボタンや、QR が壊れた時の手動 unlock 経由で完了した商品が「matching」のまま marketplace に残り続ける。
+* **対応**: `txRef.update` を WriteBatch にまとめ、`items/{id}.status = 'sold'` を同一 batch で原子的に更新する形に変更。3 つの完了パス（capturePayment / processUnlock / unlockTransaction）で同じ item 遷移が起きるようになった。
+
+#### 14. 🚨 【データ保全】items の delete を `status == 'listing'` 限定に (B5)
+* **対象**: [firestore.rules](firestore.rules:75)
+* **問題**: 旧ルールは `seller_id == request.auth.uid` のみチェックしており、状態を見ていなかった。seller が `payment_pending` 中（item.status='matching'）に item を削除可能。商品消滅で buyer が決済中の商品情報を確認できなくなる事故が起きうる。`sold` 状態でも削除可能で、取引記録の証跡が消える危険性があった。
+* **対応**: `allow delete` に `resource.data.status == 'listing'` を必須条件として追加。出品中の商品しか削除できず、取引開始後・完了後はサーバー（Admin SDK）経由でしか手を入れられない。
+* **テスト**: `tests/rules/firestore.test.ts` に「listing は削除可」「matching は削除不可」「sold は削除不可」の 3 ケースを追加。
+
+#### 15. 📜 【手順書】デプロイ手順書から削除済み関数を取り除き、クリーンビルド手順を追加 (B6 + I8)
+* **対象**: [docs/DEPLOY_2026_05_16.md](docs/DEPLOY_2026_05_16.md)
+* **問題**: 5/16 に `fixSellerStatus` を削除したのに、デプロイ手順書では「これがないと 403 になる」「Functions Console で `fixSellerStatus` の存在を確認」と書かれたまま。`functions/lib/` の古いビルド成果物に削除済み関数の `.js` が残るリスクも未対応だった。
+* **対応**: §2 と §4 の `fixSellerStatus` 言及を削除し「2026-05-16 にセキュリティ修正で削除済み」と注記。§4 にクリーンビルド手順（`rm -rf functions/lib && pnpm --prefix functions run build`）と、現存する関数の網羅リストを追加。
+
+#### 16. 🛡️ 【整合性】Stripe API を Firestore Transaction の外へ (W7)
+* **対象**: [functions/src/index.ts](functions/src/index.ts) の `capturePayment` および `adminCancelTransaction`
+* **問題**: Stripe API 呼び出し（capture / cancel / refund）を Firestore `runTransaction` の中で行っていた。Stripe の応答が遅いと Firestore Tx の 60s 上限に達し、**Stripe では capture/cancel 完了 / DB は未更新**という整合性破壊が発生しうる。
+* **対応**: 両関数を 3 フェーズに再構成。
+  1. **Phase 1 (Transaction なし)**: 取引を読んで認可・状態チェック
+  2. **Phase 2 (Transaction なし)**: Stripe API 呼び出し。`idempotencyKey` を付与して再試行を安全に。Stripe 5xx / `request_timeout` は `HttpsError 'unavailable'`（リトライ可）にマッピング。
+  3. **Phase 3 (小さな runTransaction)**: Stripe 成功を確認してから DB 更新のみ実行。冪等性チェックも入れて webhook と client の競合に耐性。
+* **効果**: Stripe API が長引いても DB 整合性は壊れない。すべての Stripe 操作に idempotencyKey が付いた（capture / cancel / refund）。
+
+#### 17. 🛑 【UX】updateTransactionStatus の offline silent failure を撤廃 (W8)
+* **対象**: [services/firestore.ts](services/firestore.ts:277)
+* **問題**: 旧実装は Firestore offline 時に `console.warn` だけ出して **silent success** を返していた。UI には「成功した」と見えるのにサーバーは未反映で、他タブやサーバー側の真実と乖離する。
+* **対応**: `error.code === 'unavailable'` を検出したら、日本語の `Error("インターネット接続がありません。オンラインに戻ってから再度お試しください。")` を throw するように変更。呼び出し側（`StripePaymentForm` 等）の既存 catch がそのままユーザーへ伝える。
+* **効果**: 「成功したように見えるが実はサーバー未反映」事故が物理的に起きなくなった。
+
+#### 18. 🌐 【UX】UI 表記の日本語化と価格バリデーション同期
+* **対象**:
+  * [app/items/create/page.tsx](app/items/create/page.tsx) - 価格バリデーション
+  * [components/transaction/StripePaymentForm.tsx](components/transaction/StripePaymentForm.tsx) - 失敗時メッセージ
+* **対応内容**:
+  * `app/items/create/page.tsx`: クライアントの価格チェックを `<= 0` → `< 300` に修正し、Firestore Rules の 300〜100,000 円レンジと完全に同期。`input` 要素にも `min="300" max="100000"` を追加。
+  * `StripePaymentForm.tsx`: 旧実装は失敗時に「決済ステータス: requires_payment_method」のように Stripe の英語 enum をそのまま表示していた。日本語の「決済を完了できませんでした。もう一度お試しいただくか、別のカードをご利用ください。（詳細: …）」に変更。DB update 失敗時の文言も `support@musalink.jp` と取引 ID を明示する形に強化。
+* **効果**: 一般ユーザー向け文言から英語が消え、エラー復旧導線が明示された。
+
+#### 19. 🧪 【テスト】Firestore Rules テスト拡充 (I12 一部)
+* **対象**: [tests/rules/firestore.test.ts](tests/rules/firestore.test.ts)
+* **追加カバレッジ**:
+  * 価格レンジ強制：299 円 / 100,001 円は create 拒否、300 円 / 100,000 円は許可（境界値）
+  * delete rule：listing は削除可、matching と sold は削除不可
+  * state machine：buyer / seller どちらからも `payment_pending → completed` の直接遷移が拒否される（Cloud Functions のみ可）
+* **効果**: B4 / B5 / W5 のロジックが将来のリファクタリングで退行した際、CI / ローカルテストで即座に検知できる。
+
+---
+
 ### 残課題（次セッションへの引き継ぎ）
 
 1. **Next.js 16.1.1 → 16.2.6 系へのセキュリティアップデート**: `pnpm audit` で DoS / SSRF / Middleware bypass 系の脆弱性が **9 件 High 残**。今回のセキュリティ修正とはスコープが違うので別 PR で対応する想定。

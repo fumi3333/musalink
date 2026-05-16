@@ -6,7 +6,7 @@ import {
     assertSucceeds,
     type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
 const PROJECT_ID = "musalink-rules-test";
@@ -159,6 +159,153 @@ describe("transactions: anonymous-auth bypass closed", () => {
                 seller_id: "bob",
                 item_id: "item1",
                 status: "request_sent",
+            })
+        );
+    });
+});
+
+describe("items: price range enforcement (300-100,000 JPY)", () => {
+    it("rejects creation at 299 yen", async () => {
+        const seller = studentAuth("seller");
+        const db = seller.firestore();
+
+        await assertFails(
+            setDoc(doc(db, "items", "item-too-cheap"), {
+                seller_id: "seller",
+                title: "test",
+                price: 299,
+                description: "x",
+                status: "listing",
+            })
+        );
+    });
+
+    it("rejects creation at 100,001 yen", async () => {
+        const seller = studentAuth("seller");
+        const db = seller.firestore();
+
+        await assertFails(
+            setDoc(doc(db, "items", "item-too-pricey"), {
+                seller_id: "seller",
+                title: "test",
+                price: 100001,
+                description: "x",
+                status: "listing",
+            })
+        );
+    });
+
+    it("accepts creation at 300 yen (lower bound)", async () => {
+        const seller = studentAuth("seller");
+        const db = seller.firestore();
+
+        await assertSucceeds(
+            setDoc(doc(db, "items", "item-min"), {
+                seller_id: "seller",
+                title: "test",
+                price: 300,
+                description: "x",
+                status: "listing",
+            })
+        );
+    });
+
+    it("accepts creation at 100,000 yen (upper bound)", async () => {
+        const seller = studentAuth("seller");
+        const db = seller.firestore();
+
+        await assertSucceeds(
+            setDoc(doc(db, "items", "item-max"), {
+                seller_id: "seller",
+                title: "test",
+                price: 100000,
+                description: "x",
+                status: "listing",
+            })
+        );
+    });
+});
+
+describe("items: delete only allowed while status == 'listing'", () => {
+    it("seller can delete their own 'listing' item", async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), "items", "live-item"), {
+                seller_id: "seller",
+                title: "test",
+                price: 500,
+                description: "x",
+                status: "listing",
+            });
+        });
+
+        const seller = studentAuth("seller");
+        await assertSucceeds(deleteDoc(doc(seller.firestore(), "items", "live-item")));
+    });
+
+    it("seller cannot delete an item that is in 'matching' (transaction in progress)", async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), "items", "matching-item"), {
+                seller_id: "seller",
+                title: "test",
+                price: 500,
+                description: "x",
+                status: "matching",
+            });
+        });
+
+        const seller = studentAuth("seller");
+        await assertFails(deleteDoc(doc(seller.firestore(), "items", "matching-item")));
+    });
+
+    it("seller cannot delete an item that has been sold (audit-trail preservation)", async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), "items", "sold-item"), {
+                seller_id: "seller",
+                title: "test",
+                price: 500,
+                description: "x",
+                status: "sold",
+            });
+        });
+
+        const seller = studentAuth("seller");
+        await assertFails(deleteDoc(doc(seller.firestore(), "items", "sold-item")));
+    });
+});
+
+describe("transactions: payment_pending -> completed is server-only", () => {
+    it("buyer cannot fast-forward payment_pending directly to completed from the client", async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), "transactions", "tx-skip"), {
+                buyer_id: "alice",
+                seller_id: "bob",
+                item_id: "item1",
+                status: "payment_pending",
+            });
+        });
+
+        const alice = studentAuth("alice");
+        await assertFails(
+            updateDoc(doc(alice.firestore(), "transactions", "tx-skip"), {
+                status: "completed",
+            })
+        );
+    });
+
+    it("seller cannot fast-forward payment_pending to completed either", async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), "transactions", "tx-skip-2"), {
+                buyer_id: "alice",
+                seller_id: "bob",
+                item_id: "item1",
+                status: "payment_pending",
+            });
+        });
+
+        const bob = studentAuth("bob");
+        await assertFails(
+            updateDoc(doc(bob.firestore(), "transactions", "tx-skip-2"), {
+                status: "completed",
             })
         );
     });
