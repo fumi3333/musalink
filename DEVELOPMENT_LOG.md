@@ -233,3 +233,44 @@ Stripe/JCBへコンプライアンスチェックリストを提出後、3日ほ
 * **問題**: `pnpm audit` で High Severity の ReDoS 脆弱性（CVE-2026-27903）が ESLint の依存である `minimatch@10.2.1` に検出された。本番ランタイムには影響しないが、CI/開発環境でビルド時の DoS リスクがある。
 * **対応内容**: pnpm の overrides 機能で脆弱なバージョン範囲を `>=10.2.3` に強制的に置き換え。次回 `pnpm install --force` で全環境に反映される。
 * **残課題**: 本コミット時点では `pnpm-lock.yaml` の minimatch 10.2.1 エントリが残っているため、メイン環境で `pnpm install --force` を一度走らせてロックファイルを更新する必要あり。
+
+---
+
+### 2026年5月16日 (金) - main ブランチ直接コミット (PRと並行)
+
+PR `claude/peaceful-pare-9bfd59` が走っている間に、main ブランチ上に未コミットだった機能改善 4 件をクリーンに分割してコミット・プッシュした。価格制限・買い手通知・学部リスト最新化・脆弱性 override の取り込みで、いずれも PR との競合は発生していない（PR は `users/{uid}` セクション、本 main コミットは `items/{itemId}` セクションを触っており別箇所）。
+
+#### 9. 💰 【法務・UX】商品価格の 300〜100,000 円レンジ強制 (7c59921)
+* **対象**: [firestore.rules](firestore.rules), [app/items/create/page.tsx](app/items/create/page.tsx)
+* **対応内容**:
+  * Firestore Rules: `items/{itemId}` の create / update に `price is int && price >= 300 && price <= 100000` を必須条件として追加。
+  * 出品フォーム: クライアントサイドバリデーションを「>0」から「>=300」に引き上げ、入力フィールドの `min` 属性も 0→300 に。
+* **効果**: 詐欺目的の ¥1 出品・誤入力の ¥0 出品・桁ミスの極端な高額出品を、サーバー・クライアント双方でブロック。特商法ページに記載した価格帯ポリシーとも整合。
+
+#### 10. 📧 【UX】取引完了時の買い手通知の追加 (be85ec3)
+* **対象**: [functions/src/notifications.ts](functions/src/notifications.ts)
+* **問題**: これまで `completed` 遷移時に通知が飛ぶのは売り手のみ。買い手側には「受け取り・支払いが完了したこと」を明示的に告げる仕組みがなく、後追いの不安や問い合わせ要因になり得た。
+* **対応内容**: 既存の `onTransactionUpdated` トリガー内に買い手向けの in-app 通知 + メール送信を追加。スキーマ変更なし。
+* **効果**: 双方が「取引完了」のオフィシャルな確認メールを受け取れるようになり、評価フェーズへの遷移がスムーズになる。
+
+#### 11. 🏫 【UX】学部リストを武蔵野大学の現行 13 学部に更新 (d46b241)
+* **対象**: [app/items/page.tsx](app/items/page.tsx), [app/mypage/page.tsx](app/mypage/page.tsx)
+* **問題**: 検索フィルタの学部リストが旧来の英語キー（"Law", "Economics", ...）のままで、しかも現在の武蔵野大学の全学部（アントレプレナーシップ学部・人間科学部・ウェルビーイング学部・薬学部・看護学部など）が網羅されていなかった。商品ドキュメント側は日本語の学部名で保存されているため、検索しても一致しないケースが発生していた。
+* **対応内容**:
+  * `items/page.tsx`: 学部セレクトの value を日本語表記に統一し、現行 13 学部を全て列挙。
+  * `mypage/page.tsx`: 古い TODO/scratch コメントと dead な lazy-load 注釈を削除（挙動変更なしのクリーンアップ）。
+* **効果**: 全学部の学生が自分の所属学部で検索できるようになり、検索ヒット率が向上。
+
+#### 12. 🔒 【セキュリティ】pnpm-workspace.yaml のリポジトリ管理化 (e3f4b34)
+* **対象**: [pnpm-workspace.yaml](pnpm-workspace.yaml)（新規）
+* **問題**: pnpm-workspace.yaml がローカル untracked のままで、`next`・`minimatch`・`hono`・`brace-expansion`・`picomatch`・`protobufjs` 等の脆弱性パッチ override が個人マシン側にしか存在しなかった。新しくクローンしたメンバーや CI には適用されない。
+* **対応内容**: 既存の override リストごとリポジトリに取り込み。チェックインしたことで、`pnpm install` 経由で誰でも同じ安全な依存ツリーが得られるようになった。
+
+---
+
+### 残課題（次セッションへの引き継ぎ）
+
+1. **Next.js 16.1.1 → 16.2.6 系へのセキュリティアップデート**: `pnpm audit` で DoS / SSRF / Middleware bypass 系の脆弱性が **9 件 High 残**。今回のセキュリティ修正とはスコープが違うので別 PR で対応する想定。
+2. **Custom Claim 付与の実運用**: 本番管理者 UID に `setCustomUserClaims(uid, { admin: true })` を手動付与する必要あり。手順は [docs/DEPLOY_2026_05_16.md](docs/DEPLOY_2026_05_16.md) §2 参照。スクリプト: [scripts/grant-admin-claim.js](scripts/grant-admin-claim.js)。
+3. **本番デプロイ**: `firebase deploy --only firestore:rules,functions,hosting` を、Custom Claim 付与の後に実行する。手順書通り。
+4. **Vercel 連携の解除**: GitHub の Apps 設定から Vercel のリポジトリアクセスを外す。Firebase Hosting がメインのため Vercel preview は不要。詳細は [docs/notes/claude-code-permissions-memo.md](docs/notes/claude-code-permissions-memo.md) と CLAUDE.md 参照。
