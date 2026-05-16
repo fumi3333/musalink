@@ -8,18 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Lock, Unlock, Copy, CheckCircle, AlertTriangle, Coins, ArrowRight, UserCheck } from 'lucide-react';
 import { RevealableContent } from './RevealableContent';
-import { calculateFee } from '@/lib/constants';
-
-function getTransactionStatusLabel(status: TransactionStatus): string {
-    switch (status) {
-        case 'request_sent': return '承認待ち';
-        case 'approved': return '支払い待ち';
-        case 'payment_pending': return '受渡待ち';
-        case 'completed': return '取引完了';
-        case 'cancelled': return 'キャンセル';
-        default: return status;
-    }
-}
+import { calculateFee, getTransactionStatusLabel } from '@/lib/constants';
 import { TransactionStepper } from './TransactionStepper';
 import { MeetingPlaceSelector } from './MeetingPlaceSelector';
 import { cn } from '@/lib/utils';
