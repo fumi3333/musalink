@@ -72,7 +72,12 @@ service cloud.firestore {
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
                       )
                     );
-      allow delete: if isAuthenticated() && resource.data.seller_id == request.auth.uid;
+      // 2026-05-16: seller can only delete items that are still listing — once a
+      // transaction is in progress (matching) or completed (sold), the item must
+      // be preserved as evidence / for the counterparty.
+      allow delete: if isAuthenticated()
+                    && resource.data.seller_id == request.auth.uid
+                    && resource.data.status == 'listing';
     }
 
     // Transactions: Involved Parties Only

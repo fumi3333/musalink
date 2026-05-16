@@ -66,12 +66,21 @@ export default function StripePaymentForm({ transactionId, userId, amount, onSuc
                 onSuccess(); // Triggers UI refresh
             } catch (dbError: any) {
                 console.error(dbError);
-                setMessage("決済は承認されましたが、ステータス更新に失敗しました。");
+                setMessage(
+                    "決済の枠確保は完了しましたが、取引ステータスの更新に失敗しました。\n" +
+                    "お手数ですが support@musalink.jp までご連絡ください。\n" +
+                    `取引ID: ${transactionId}`
+                );
             } finally {
                 setIsLoading(false);
             }
         } else {
-            setMessage("決済ステータス: " + paymentIntent?.status);
+            // paymentIntent?.status は Stripe の英語 enum（例: requires_payment_method）。
+            // 一般ユーザーには日本語で「処理を続けられませんでした」と伝え、技術詳細はサポート向けに残す。
+            setMessage(
+                `決済を完了できませんでした。もう一度お試しいただくか、別のカードをご利用ください。\n` +
+                `(詳細: ${paymentIntent?.status ?? "不明"})`
+            );
             setIsLoading(false);
         }
     };
