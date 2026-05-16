@@ -14,7 +14,7 @@ export interface User {
     interests?: string[]; // [New] Zax統合用の興味タグ
     responseTimeAvg?: number; // [New] 平均返信時間（秒）
     coin_balance: number; // 現在保有コイン
-    locked_balance: number; // エスクロー中コイン
+    locked_balance: number; // 取引中（仮押さえ中）コイン
     is_verified?: boolean; // 学籍番号認証済み
     stripe_connect_id?: string; // Stripe Connect Account ID (acct_...)
     charges_enabled?: boolean; // 決済有効化フラグ (KYC完了)

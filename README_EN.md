@@ -10,7 +10,7 @@ Version: 1.0.0 | Status: Live | Production URL: https://musa-link.web.app/
 
 Musalink is a self-developed C2C web platform designed for students at Musashino University to circulate textbooks and study materials safely and affordably.
 
-By combining a fully closed authentication environment (restricted to university domains) with an escrow payment flow using Stripe Connect, the platform enables trustworthy peer-to-peer transactions — all within a student-only community.
+By combining a fully closed authentication environment (restricted to university domains) with a secure payment hold flow using Stripe Connect, the platform enables trustworthy peer-to-peer transactions — all within a student-only community.
 
 > Note: This is an independent student project and is not an official university service.
 
@@ -93,7 +93,7 @@ if (!isAllowed) {
 }
 ```
 
-### 2. C2C Escrow Payment Flow with Stripe Connect
+### 2. C2C Secure Payment Hold Flow with Stripe Connect
 
 The platform uses `capture_method: 'manual'` Payment Intents to separate authorization (Auth Hold) from actual settlement (Capture):
 
