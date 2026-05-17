@@ -9,6 +9,7 @@ export * from "./stripe";        // Stripe Connect / Payment Intent / capture / 
 export * from "./transactions";  // unlock / cancel / rate / admin cancel / cron sweep
 export * from "./identity";      // verifyUserIdentity
 export * from "./notifications"; // Firestore triggers (transaction created/updated)
+export * from "./contact";       // sendContactEmail — お問い合わせフォーム
 
 // 過去関数の履歴メモ:
 // - fixSellerStatus: 2026-05-16 削除（モック Stripe ID を書く dev-only ショートカット、本番危険）
