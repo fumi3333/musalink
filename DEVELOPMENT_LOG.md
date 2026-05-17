@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-05-17 (2nd entry)
+
+### 出品ボタンが押せないバグの修正（field-lockdown 連鎖事故）
+
+**症状**: ログイン後に「出品する」ページへ行っても「本人確認が必要です」「口座設定が必要です」のいずれかでブロックされる。本人確認ボタンを押しても何も進まない。
+
+**根本原因**: 2026-05-16 の field-level lockdown で `is_verified` / `trust_score` を `userServerOnlyFields()` に追加したが、これらをクライアントから書き込んでいた既存コードを移植し忘れていた。
+- [contexts/AuthContext.tsx](contexts/AuthContext.tsx): 初回ログイン時に `is_verified: true` と `trust_score: 5.0` を含む `setDoc` を実行 → ルールで `create` 拒否 → **ユーザー document 自体が生成されない** → `userData` が永遠に null → 全機能停止
+- [app/verify/page.tsx](app/verify/page.tsx): verify ボタン押下時に `is_verified: true` を `setDoc` で書こうとして permission-denied
+
+**修正**:
+1. 新規 Cloud Function `verifyUserIdentity` を追加 — Auth Token から email → ドメイン検証 → 学籍番号抽出 → サーバー側で `is_verified=true` + 初回 verify 時に `trust_score=5.0` / `ratings={count:0, sum:0}` を初期化
+2. [app/verify/page.tsx](app/verify/page.tsx) を `httpsCallable('verifyUserIdentity')` 経由に変更。成功後は `window.location.href` でフルリロードして AuthContext を再フェッチ
+3. [contexts/AuthContext.tsx](contexts/AuthContext.tsx) から `is_verified` / `trust_score` のクライアント書き込みを削除
+
+**コミット**: 29d06b6, 87614ef
+
+**学び**: field-lockdown を入れるときは、既存のクライアントコードを全部 grep して書き込みパスを洗い出す。「Admin SDK で書く」前提のフィールドにしたなら、対応する Cloud Function も同 PR で用意する。
+
+---
+
 ## 2026-05-17
 
 ### テスト環境デプロイ完了 + コード品質改善
