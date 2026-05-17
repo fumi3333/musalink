@@ -461,7 +461,7 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
     return { success: true, message: "Transaction unlocked." };
 }
 
-// [Phase 11] Create Payment Intent (Platform-Held / Hybrid)
+// Create Payment Intent (Platform-Held / Hybrid)
 // onRequest + Manual Auth (via API Route Proxy)
 export const createPaymentIntent = functions.https.onRequest(async (req, res) => {
     if (applyCors(req, res)) return;
@@ -587,10 +587,10 @@ export const createPaymentIntent = functions.https.onRequest(async (req, res) =>
     }
 });
 
-// [Phase 13] Capture Payment (QR Scan)
+// Capture Payment (QR Scan)
 export const capturePayment = functions.https.onCall(async (data, context) => {
     console.log("[capturePayment] INVOKED. Data:", JSON.stringify(data)); // Force Log Entry
-    // [Phase 14] Capture Payment (Payment Intent)
+    // Capture Payment (Payment Intent) — manual capture confirms the auth hold
     // 承認済み (approved) -> 支払い確定 (completed)
     try {
     // 1. Auth Check (Must be logged in)
@@ -712,7 +712,7 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
     }
 });
 
-// [Phase 14] Unlock Transaction (Fallback / Manual)
+// Unlock Transaction (Fallback / Manual) — buyer-only HTTPS endpoint used when callable path fails
 // onRequest + Manual Auth (via API Route Proxy)
 export const unlockTransaction = functions.https.onRequest(async (req, res) => {
     if (applyCors(req, res)) return;
@@ -1241,5 +1241,5 @@ async function checkRateLimit(userId: string, action: string, limit: number, win
 // 復旧用途で必要になった場合は、Stripe API 経由で実際の charges_enabled を
 // 読み戻して反映する別関数として、admin allow-list 付きで作り直すこと。
 
-// [Phase 2] Notifications
+// Notifications triggers (declared in ./notifications.ts)
 export * from "./notifications";

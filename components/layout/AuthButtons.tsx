@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 
 export const AuthButtons = () => {
-    const { user, userData, login, logout, loading, error, unreadNotifications } = useAuth();
+    const { user, userData, login, logout, loading, error, clearError, unreadNotifications } = useAuth();
     const [showErrorDialog, setShowErrorDialog] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -26,6 +26,12 @@ export const AuthButtons = () => {
             setShowErrorDialog(true);
         }
     }, [error]);
+
+    // ダイアログを閉じた時にエラー state もクリア（次の試行で古いエラーを表示しない）
+    const handleDialogChange = (open: boolean) => {
+        setShowErrorDialog(open);
+        if (!open) clearError();
+    };
 
     const isVerified = user?.email?.endsWith('@stu.musashino-u.ac.jp');
 
@@ -56,30 +62,35 @@ export const AuthButtons = () => {
 
 
 
-                <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+                <Dialog open={showErrorDialog} onOpenChange={handleDialogChange}>
                     <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 text-red-600">
                                 <AlertCircle className="w-5 h-5" />
-                                ログイン設定エラー
+                                ログインに失敗しました
                             </DialogTitle>
-                            <DialogDescription className="pt-2">
-                                <div className="text-sm text-muted-foreground">
-                                    {error}
-                                    <br /><br />
-                                    {(error && error.includes("設定")) && (
-                                        <>
-                                            <span className="font-bold text-slate-700">解決手順:</span>
-                                            <ol className="list-decimal list-inside mt-2 text-xs space-y-1">
-                                                <li>Firebase Consoleを開く</li>
-                                                <li>認証 &gt; サインイン方法を選択</li>
-                                                <li>Googleプロバイダを「有効」にする</li>
-                                            </ol>
-                                        </>
-                                    )}
-                                </div>
+                            <DialogDescription className="pt-2 text-sm text-muted-foreground">
+                                {error}
                             </DialogDescription>
                         </DialogHeader>
+                        <div className="text-sm text-slate-700 space-y-3">
+                            <div className="bg-amber-50 border border-amber-200 rounded p-3">
+                                <p className="font-bold text-amber-800 mb-1">📱 LINE / Instagram 内ブラウザの場合</p>
+                                <p className="text-xs">
+                                    画面右上の「…」メニュー → 「Safari / Chrome で開く」を選んでください。
+                                </p>
+                            </div>
+                            {error && error.includes("設定") && (
+                                <div className="bg-slate-50 border border-slate-200 rounded p-3">
+                                    <p className="font-bold text-slate-700 mb-1">⚙️ サポート向け（管理者向け）</p>
+                                    <ol className="list-decimal list-inside text-xs space-y-1">
+                                        <li>Firebase Console を開く</li>
+                                        <li>Authentication &gt; Sign-in method</li>
+                                        <li>Google プロバイダを「有効」にする</li>
+                                    </ol>
+                                </div>
+                            )}
+                        </div>
                     </DialogContent>
                 </Dialog>
             </div>

@@ -1,26 +1,9 @@
 import { auth } from './firebase';
-import { GoogleAuthProvider, signInWithPopup, signOut, User, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
+import { signOut, User, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 import { ALLOWED_DOMAIN } from './constants';
 
-export const signInWithGoogle = async (): Promise<User | null> => {
-    const provider = new GoogleAuthProvider();
-    try {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-
-        // Domain Restriction Validation
-        if (!user.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
-            // Unauthorized domain
-            await signOut(auth); // Immediately sign out
-            throw new Error(`Only ${ALLOWED_DOMAIN} email addresses are allowed.`);
-        }
-
-        return user;
-    } catch (error) {
-        console.error("Error signing in with Google", error);
-        throw error;
-    }
-};
+// 注: Google ログインは AuthContext の login() を使う。
+// 旧 signInWithGoogle() / logout() はこのファイルから 2026-05-17 に削除済み。
 
 export const sendLoginLink = async (email: string) => {
     if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
@@ -74,11 +57,3 @@ export const verifyEmailLink = async (windowUrl: string): Promise<User | null> =
     return null;
 };
 
-export const logout = async () => {
-    try {
-        await signOut(auth);
-    } catch (error) {
-        console.error("Error signing out", error);
-        throw error;
-    }
-};

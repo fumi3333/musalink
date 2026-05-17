@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 
 export const InAppBrowserGuard = ({ children }: { children: React.ReactNode }) => {
     const [isInAppBrowser, setIsInAppBrowser] = useState(false);

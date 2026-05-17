@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
-import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { onAuthStateChanged, User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 
@@ -11,6 +11,7 @@ interface AuthContextType {
     userData: any | null;
     loading: boolean;
     error: string | null;
+    clearError: () => void;
     unreadNotifications: number;
     login: () => Promise<void>;
     logout: () => Promise<void>;
@@ -23,6 +24,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // signInWithRedirect 経由でログインしてきた場合、戻った直後のページロードで結果を回収する。
+    // 成功時の onAuthStateChanged は自動で発火するので、ここでは toast 表示のみ。
+    useEffect(() => {
+        getRedirectResult(auth)
+            .then((result) => {
+                if (result?.user) {
+                    toast.success("ログインしました");
+                }
+            })
+            .catch((e: any) => {
+                if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') {
+                    return; // ユーザーによるキャンセルは無視
+                }
+                console.error("[Auth] getRedirectResult error:", e);
+                setError(`ログイン後の処理でエラー: ${e?.message || '不明'}`);
+            });
+    }, []);
 
     useEffect(() => {
         // Safety timeout to prevent infinite loading
@@ -194,38 +213,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => unsub();
     }, [user]);
 
+    const clearError = () => setError(null);
+
     const login = async () => {
         setError(null);
+
+        const provider = new GoogleAuthProvider();
+        // Force account selection for users with multiple accounts (esp. on mobile)
+        provider.setCustomParameters({ prompt: 'select_account' });
+
+        // popup blocked / unsupported (LINE in-app browser等) は redirect にフォールバック
+        const POPUP_BLOCKED_CODES = new Set([
+            'auth/popup-blocked',
+            'auth/operation-not-supported-in-this-environment',
+            'auth/web-storage-unsupported',
+        ]);
+
         try {
-            const provider = new GoogleAuthProvider();
-            // Force account selection for users with multiple accounts (esp. on mobile)
-            provider.setCustomParameters({
-                prompt: 'select_account'
-            });
             await signInWithPopup(auth, provider);
             toast.success("ログインしました");
         } catch (e: any) {
-            if (e.code === 'auth/configuration-not-found') {
-                const msg = "Googleログイン設定が有効になっていません (Firebase Console確認)";
-                console.warn(msg);
-                setError(msg);
-                return;
+            // Popup ブロック等 → redirect で再試行（戻ってきたら getRedirectResult で受け取る）
+            if (POPUP_BLOCKED_CODES.has(e.code)) {
+                console.warn(`[Auth] Popup unavailable (${e.code}), falling back to redirect`);
+                toast.info("ポップアップが開けないため、別画面でログインします…");
+                try {
+                    await signInWithRedirect(auth, provider);
+                    return; // ページが遷移するのでここから先は到達しない
+                } catch (redirectErr: any) {
+                    console.error("[Auth] Redirect fallback also failed:", redirectErr);
+                    const msg = "ログインに失敗しました。Safari か Chrome で開き直してください。";
+                    setError(msg);
+                    toast.error(msg);
+                    throw redirectErr;
+                }
             }
 
-            console.error("Login Error:", e);
+            // ユーザーによるキャンセルは静かに（toast.info のみ）
+            if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+                toast.info("ログインがキャンセルされました");
+                throw e;
+            }
+
+            // Firebase Console の Google プロバイダー未設定
             if (e.code === 'auth/configuration-not-found') {
-                const msg = "Googleログイン設定が有効になっていません。Firebase Consoleで有効化してください。";
+                const msg = "Googleログイン設定が有効になっていません。Firebase Console で Google プロバイダーを有効化してください。";
+                console.error("[Auth] Configuration error:", e);
                 setError(msg);
                 toast.error(msg);
-            } else if (e.code === 'auth/popup-closed-by-user') {
-                toast.info("ログインがキャンセルされました");
-            } else if (e.code === 'auth/cancelled-popup-request') {
-                // 複数回クリックや別ポップアップでキャンセルされた場合
-                toast.info("ログインがキャンセルされました。もう一度お試しください");
-            } else {
-                toast.error("ログインエラー: " + e.message);
-                setError(e.message);
+                throw e;
             }
+
+            // それ以外は汎用エラー
+            console.error("[Auth] Login error:", e);
+            const msg = `ログインエラー: ${e.message || '不明なエラー'}`;
+            setError(msg);
+            toast.error(msg);
             throw e;
         }
     };
@@ -246,7 +289,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
     return (
-        <AuthContext.Provider value={{ user, userData, loading, error, unreadNotifications, login, logout }}>
+        <AuthContext.Provider value={{ user, userData, loading, error, clearError, unreadNotifications, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

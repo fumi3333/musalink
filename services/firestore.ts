@@ -57,9 +57,9 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue: T): Prom
 };
 
 // --- Items Service ---
-import { logEvent, logSearchMiss } from './analytics';
-
-
+// (2026-05-17) analytics_logs writes removed — Firestore Rules block the collection
+// and the catch() was silently swallowing errors. If we re-introduce analytics,
+// route it through a Cloud Function or BigQuery sink instead.
 
 export const createItem = async (item: Omit<Item, 'id'>) => {
     try {
@@ -72,9 +72,6 @@ export const createItem = async (item: Omit<Item, 'id'>) => {
             2000,
             "mock_item_" + Date.now()
         );
-
-        // [Analytics] Log New Listing
-        logEvent('item_listed', { itemId: docRefId, sellerId: item.seller_id, price: item.price, title: item.title });
 
         return docRefId;
     } catch (error: any) {
@@ -147,17 +144,6 @@ export const getItems = async (filters?: { department?: string, grade?: string, 
         }
 
         // [Analytics] Log Search Miss (Zero Results)
-        if (results.length === 0) {
-            // Only log if meaningful search (filters or keyword exist)
-            const hasFilters = filters?.category !== "all" || filters?.department !== "all" || filters?.grade !== "all" || !!filters?.keyword;
-
-            if (hasFilters) {
-                const logKw = filters?.keyword || "filter_only";
-                // Delay logging slightly to avoid blocking UI? No, it's async promise usually or fire-and-forget.
-                logSearchMiss(logKw, filters, "anonymous_or_context_user");
-            }
-        }
-
         return results;
     } catch (error: any) {
         // ... (Offline handling)

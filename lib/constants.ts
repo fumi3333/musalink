@@ -3,6 +3,8 @@ import type { ItemCategory, TransactionStatus } from '@/types';
 export const APP_NAME = "Musalink";
 
 // 費用の設定
+// ⚠️ DUAL SOURCE: `functions/src/constants.ts` の同名定数と同期させること。
+// Cloud Functions の tsconfig からはこのファイルを参照できないため値を二重管理している。
 export const SYSTEM_FEE_RATE = 0.10; // 10% platform fee
 
 /**

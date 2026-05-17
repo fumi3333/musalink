@@ -7,7 +7,7 @@ import { getTransaction, getItem, getUser, updateTransactionStatus } from '@/ser
 import { Transaction, Item, User, TransactionStatus } from '@/types';
 import { TransactionDetailView } from '@/components/transaction/TransactionDetailView';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { FUNCTIONS_BASE_URL, getTransactionStatusLabel } from '@/lib/constants';
 
 
