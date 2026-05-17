@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { extractStudentId } from '@/lib/studentId';
@@ -43,25 +44,22 @@ export default function VerificationPage() {
         setLoading(true);
 
         try {
-            const userRef = doc(db, "users", user.uid);
+            // 2026-05-17: クライアントから is_verified を直接書けないため Cloud Function 経由
+            // (firestore.rules で server-managed field として lockdown 済み)
+            const functions = getFunctions(undefined, 'us-central1');
+            const verify = httpsCallable<void, { success: boolean; student_id: string }>(functions, 'verifyUserIdentity');
+            const result = await verify();
 
-            // Ensure user doc exists, then update
-            await setDoc(userRef, {
-                id: user.uid,
-                university_email: user.email,
-                student_id: studentId,
-                is_verified: true,
-                updatedAt: new Date()
-            }, { merge: true });
-
-            toast.success("本人確認が完了しました！");
-            setIsVerified(true);
-            // Redirect to Payout Setup (Stripe Connect)
-            setTimeout(() => router.push('/seller/payout'), 1500);
-
+            if (result.data.success) {
+                toast.success("本人確認が完了しました！");
+                setIsVerified(true);
+                setTimeout(() => router.push('/seller/payout'), 1500);
+            } else {
+                throw new Error('Verification did not return success');
+            }
         } catch (e: any) {
             console.error(e);
-            toast.error("エラーが発生しました: " + e.message);
+            toast.error("エラーが発生しました: " + (e.message || '不明なエラー'));
         } finally {
             setLoading(false);
         }

@@ -249,6 +249,52 @@ export const syncStripeStatus = functions.https.onCall(async (data, context) => 
     }
 });
 
+// 本人確認 (Identity Verification) - サーバー側で is_verified を書き込む
+// 経緯: 2026-05-16 の field-lockdown 後、クライアントから is_verified を書けなくなったため
+// Auth Token から email を取得 → @stu.musashino-u.ac.jp 検証 → 学籍番号抽出 → サーバー側で書き込み
+export const verifyUserIdentity = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+    }
+
+    const uid = context.auth.uid;
+    const email = context.auth.token.email;
+
+    if (!email) {
+        throw new functions.https.HttpsError('failed-precondition', 'Email not available on auth token.');
+    }
+
+    const match = email.match(/^([a-zA-Z0-9]+)@stu\.musashino-u\.ac\.jp$/);
+    if (!match) {
+        throw new functions.https.HttpsError('permission-denied', '武蔵野大学の学生メール (@stu.musashino-u.ac.jp) でログインしてください。');
+    }
+
+    const studentId = match[1];
+
+    try {
+        const userRef = db.collection('users').doc(uid);
+        const privateRef = userRef.collection('private_data').doc('profile');
+
+        const batch = db.batch();
+        batch.set(userRef, {
+            id: uid,
+            is_verified: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        batch.set(privateRef, {
+            student_id: studentId,
+            university_email: email,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        await batch.commit();
+
+        console.log(`[verifyUserIdentity] User ${uid} verified with student_id ${studentId}`);
+        return { success: true, student_id: studentId };
+    } catch (e) {
+        return handleCallableError(e, "verifyUserIdentity");
+    }
+});
+
 // 24時間反応がない取引を自動キャンセルする定時実行関数
 // 実行頻度: 60分ごと
 // 24時間反応がない取引を自動キャンセルする定時実行関数
