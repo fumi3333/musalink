@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-05-17
+
+### テスト環境デプロイ完了 + コード品質改善
+
+**背景**: 5/18ベータテストに向け、セキュリティ/法務大規模修正（PR #4）をテスト環境（musa-link.web.app）に適用した。
+
+#### デプロイ内容（テスト環境 `musa-link`）
+- **Firestore Rules**: field-level lockdown / anonymous bypass 削除 / items delete=listing のみ / conversations 全禁止
+- **Cloud Functions (13関数)**: `fixSellerStatus` / `onMessageCreated` をサービスから削除（ローカル削除済みだった関数を Firebase からも物理削除）
+- **Hosting**: 全ページ再デプロイ（cookie同意バナー / 手数料表記 / 通知文言 / Footer修正を含む）
+
+#### コード品質改善（commit 055a5e6）
+- **I10**: `admin.firestore.Timestamp.now()` → `admin.firestore.FieldValue.serverTimestamp()` に統一
+  - 対象: index.ts (write操作全16箇所) / notifications.ts (7箇所)
+  - 比較演算用 (`cancelStaleTransactions`, `checkRateLimit`) は `Timestamp.now()` を維持
+  - **理由**: サーバー側タイムスタンプに統一することでクライアント時刻ズレを排除
+- **I9**: `onRequest` 関数のエラーレスポンスを `res.status().send(string)` → `res.status().json({ error: '...' })` に統一
+  - 対象: executeStripeConnect / createPaymentIntent / unlockTransaction / stripeWebhook の各認証・バリデーションエラー
+  - 204 CORS preflight の `send('')` は維持
+  - **理由**: クライアント側の JSON.parse エラーを防ぐ
+- **I12**: Firestore Rules テストに4スイートを追加
+  - 価格レンジの update 時チェック（create だけでなく update も適用）
+  - 非オーナーによる他人の商品 delete 拒否
+  - buyer_id をなりすました取引 create 拒否
+
+#### 残作業（次セッション以降）
+- Custom Claim 付与: `node scripts/grant-admin-claim.js <email>` (serviceAccountKey.json が必要)
+- Vercel 連携解除: https://github.com/settings/installations → Vercel → Configure → リポジトリ削除
+- Functions デプロイ（I9/I10修正分）: `firebase deploy --only functions`
+- Next.js セキュリティアップデート: 16.1.1 → 16.2.6+ (別PR)
+- 5/18ベータテスト: Stripe テストカード `4242 4242 4242 4242` で全フロー確認
+
+---
+
 ## 📌 現在のプロジェクト状況 (2026年5月12日 時点)
 
 ### 💳 Musalink / Stripe のステータス
