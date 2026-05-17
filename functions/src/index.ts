@@ -89,7 +89,7 @@ export const executeStripeConnect = functions.https.onRequest(async (req, res) =
     // 1. Auth Check
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).send('Unauthorized');
+        res.status(401).json({ error: 'Unauthorized' });
         return;
     }
     const idToken = authHeader.split('Bearer ')[1];
@@ -99,9 +99,9 @@ export const executeStripeConnect = functions.https.onRequest(async (req, res) =
         userId = decodedToken.uid;
     } catch (error: any) {
         if (error.code === 'auth/id-token-revoked') {
-            res.status(401).send('Token has been revoked. Please re-authenticate.');
+            res.status(401).json({ error: 'Token has been revoked. Please re-authenticate.' });
         } else {
-            res.status(401).send('Invalid Token');
+            res.status(401).json({ error: 'Invalid Token' });
         }
         return;
     }
@@ -233,12 +233,12 @@ export const syncStripeStatus = functions.https.onCall(async (data, context) => 
         batch.set(db.collection('users').doc(userId), {
             stripe_connect_id: stripeConnectId,
             charges_enabled: chargesEnabled,
-            updatedAt: admin.firestore.Timestamp.now()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         batch.set(privateRef, {
             stripe_connect_id: stripeConnectId,
             charges_enabled: chargesEnabled,
-            updatedAt: admin.firestore.Timestamp.now()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         await batch.commit();
 
@@ -387,9 +387,9 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
         unlocked_assets: {
             student_id: studentId,
             university_email: universityEmail,
-            unlockedAt: admin.firestore.Timestamp.now()
+            unlockedAt: admin.firestore.FieldValue.serverTimestamp()
         },
-        updatedAt: admin.firestore.Timestamp.now()
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
     // 3. Mark the item as sold so it disappears from listings and stays
@@ -397,7 +397,7 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
     if (itemDoc.exists) {
         t.update(itemRef, {
             status: 'sold',
-            updatedAt: admin.firestore.Timestamp.now()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
     }
 
@@ -411,14 +411,14 @@ export const createPaymentIntent = functions.https.onRequest(async (req, res) =>
 
     // 1. Method Check
     if (req.method !== 'POST') {
-        res.status(405).send('Method Not Allowed');
+        res.status(405).json({ error: 'Method Not Allowed' });
         return;
     }
 
     // 2. Auth Check (Manual)
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).send('Unauthorized: Missing or invalid token');
+        res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
         return;
     }
     const idToken = authHeader.split('Bearer ')[1];
@@ -429,9 +429,9 @@ export const createPaymentIntent = functions.https.onRequest(async (req, res) =>
     } catch (error: any) {
         console.error("Auth Error:", error);
         if (error.code === 'auth/id-token-revoked') {
-            res.status(401).send('Unauthorized: Token has been revoked');
+            res.status(401).json({ error: 'Unauthorized: Token has been revoked' });
         } else {
-            res.status(401).send('Unauthorized: Invalid token');
+            res.status(401).json({ error: 'Unauthorized: Invalid token' });
         }
         return;
     }
@@ -517,7 +517,7 @@ export const createPaymentIntent = functions.https.onRequest(async (req, res) =>
 
         await db.collection("transactions").doc(transactionId).update({
             payment_intent_id: paymentIntent.id,
-            updatedAt: admin.firestore.Timestamp.now()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
         // Standard JSON Response
@@ -633,15 +633,15 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
                 unlocked_assets: {
                     student_id: studentId,
                     university_email: universityEmail,
-                    unlockedAt: admin.firestore.Timestamp.now()
+                    unlockedAt: admin.firestore.FieldValue.serverTimestamp()
                 },
-                updatedAt: admin.firestore.Timestamp.now()
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
             if (itemDoc.exists) {
                 t.update(itemRef, {
                     status: 'sold',
-                    updatedAt: admin.firestore.Timestamp.now()
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
             }
 
@@ -662,14 +662,14 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
 
     // 1. Method Check
     if (req.method !== 'POST') {
-        res.status(405).send('Method Not Allowed');
+        res.status(405).json({ error: 'Method Not Allowed' });
         return;
     }
 
     // 2. Auth Check (Manual)
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).send('Unauthorized: Missing or invalid token');
+        res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
         return;
     }
     const idToken = authHeader.split('Bearer ')[1];
@@ -680,9 +680,9 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
     } catch (error: any) {
         console.error("Unlock Auth Error:", error);
         if (error.code === 'auth/id-token-revoked') {
-            res.status(401).send('Unauthorized: Token has been revoked');
+            res.status(401).json({ error: 'Unauthorized: Token has been revoked' });
         } else {
-            res.status(401).send('Unauthorized: Invalid token');
+            res.status(401).json({ error: 'Unauthorized: Invalid token' });
         }
         return;
     }
@@ -749,14 +749,14 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
             unlocked_assets: {
                 student_id: studentId,
                 university_email: universityEmail,
-                unlockedAt: admin.firestore.Timestamp.now()
+                unlockedAt: admin.firestore.FieldValue.serverTimestamp()
             },
-            updatedAt: admin.firestore.Timestamp.now()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
         if (tx.item_id) {
             batch.update(db.collection('items').doc(tx.item_id), {
                 status: 'sold',
-                updatedAt: admin.firestore.Timestamp.now()
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
         }
         await batch.commit();
@@ -857,7 +857,7 @@ export const cancelTransaction = functions.https.onCall(async (data, context) =>
                 status: 'cancelled',
                 cancel_reason: reason || "User requested",
                 cancelledBy: callerId,
-                cancelledAt: admin.firestore.Timestamp.now()
+                cancelledAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
             // Item -> listing (Release item)
@@ -994,7 +994,7 @@ export const stripeWebhook = functions.https.onRequest(async (req: functions.htt
     } catch (err: any) {
         // SECURITY: Do not expose internal error details in response body (2026-05-13)
         console.error(`Webhook signature verification failed: ${err.message}`);
-        res.status(400).send('Bad Request');
+        res.status(400).json({ error: 'Bad Request: Invalid webhook signature' });
         return;
     }
 
@@ -1013,12 +1013,12 @@ export const stripeWebhook = functions.https.onRequest(async (req: functions.htt
                 batch.set(userRef, { 
                     stripe_connect_id: account.id,
                     charges_enabled: chargesEnabled,
-                    updatedAt: admin.firestore.Timestamp.now()
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
                 batch.set(privateProfileRef, { 
                     stripe_connect_id: account.id,
                     charges_enabled: chargesEnabled,
-                    updatedAt: admin.firestore.Timestamp.now()
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
                 await batch.commit();
 
@@ -1045,7 +1045,7 @@ export const stripeWebhook = functions.https.onRequest(async (req: functions.htt
                 console.log('Webhook: Successfully Unlocked');
             } catch (e) {
                 console.error("Webhook Unlock Failed", e);
-                res.status(500).send("Unlock Failed");
+                res.status(500).json({ error: 'Unlock Failed' });
                 return;
             }
         }
@@ -1131,7 +1131,7 @@ export const adminCancelTransaction = functions.https.onCall(async (data, contex
 
             t.update(txRef, {
                 status: 'cancelled',
-                cancelledAt: admin.firestore.Timestamp.now(),
+                cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
                 cancel_reason: reason || "admin_force_cancel",
                 stripeActionTaken: stripeAction
             });

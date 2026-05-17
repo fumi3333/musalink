@@ -310,3 +310,74 @@ describe("transactions: payment_pending -> completed is server-only", () => {
         );
     });
 });
+
+describe("items: price range enforced on update too", () => {
+    it("seller cannot lower price below 300 on update", async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), "items", "item-update-cheap"), {
+                seller_id: "seller",
+                title: "test",
+                price: 1000,
+                description: "x",
+                status: "listing",
+            });
+        });
+
+        const seller = studentAuth("seller");
+        await assertFails(
+            updateDoc(doc(seller.firestore(), "items", "item-update-cheap"), {
+                price: 299,
+            })
+        );
+    });
+
+    it("seller can update price within range", async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), "items", "item-update-ok"), {
+                seller_id: "seller",
+                title: "test",
+                price: 1000,
+                description: "x",
+                status: "listing",
+            });
+        });
+
+        const seller = studentAuth("seller");
+        await assertSucceeds(
+            updateDoc(doc(seller.firestore(), "items", "item-update-ok"), {
+                price: 5000,
+            })
+        );
+    });
+});
+
+describe("items: non-owner cannot delete another's item", () => {
+    it("buyer cannot delete a seller's listing", async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), "items", "others-item"), {
+                seller_id: "seller",
+                title: "test",
+                price: 500,
+                description: "x",
+                status: "listing",
+            });
+        });
+
+        const buyer = studentAuth("buyer");
+        await assertFails(deleteDoc(doc(buyer.firestore(), "items", "others-item")));
+    });
+});
+
+describe("transactions: non-participant cannot create with spoofed buyer_id", () => {
+    it("mallory cannot create a transaction claiming to be alice", async () => {
+        const mallory = studentAuth("mallory");
+        await assertFails(
+            setDoc(doc(mallory.firestore(), "transactions", "fake-tx"), {
+                buyer_id: "alice",
+                seller_id: "bob",
+                item_id: "item1",
+                status: "request_sent",
+            })
+        );
+    });
+});

@@ -74,7 +74,7 @@ export const onTransactionCreated = functions.firestore
             title: "商品が購入されました",
             body: itemTitle,
             link: `/transactions/detail?id=${context.params.transactionId}`,
-            createdAt: admin.firestore.Timestamp.now(),
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
             read: false
         });
 
@@ -119,7 +119,7 @@ export const onTransactionUpdated = functions.firestore
                 title: "リクエスト承認",
                 body: `「${itemTitle}」が承認されました。支払いに進んでください。`,
                 link: `/transactions/detail?id=${transactionId}`,
-                createdAt: admin.firestore.Timestamp.now(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 read: false
             });
 
@@ -150,7 +150,7 @@ export const onTransactionUpdated = functions.firestore
                 title: "支払い予約完了",
                 body: `「${itemTitle}」の支払い予約が完了しました。受け渡しを行ってください。`,
                 link: `/transactions/detail?id=${transactionId}`,
-                createdAt: admin.firestore.Timestamp.now(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 read: false
             });
 
@@ -182,7 +182,7 @@ export const onTransactionUpdated = functions.firestore
                 title: "取引完了",
                 body: `「${itemTitle}」の受け渡しが完了し、売上が確定しました。`,
                 link: `/transactions/detail?id=${transactionId}`,
-                createdAt: admin.firestore.Timestamp.now(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 read: false
             });
 
@@ -206,7 +206,7 @@ export const onTransactionUpdated = functions.firestore
                     title: "取引完了",
                     body: `「${itemTitle}」の受け取りが完了しました。`,
                     link: `/transactions/detail?id=${transactionId}`,
-                    createdAt: admin.firestore.Timestamp.now(),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     read: false
                 });
 
@@ -254,7 +254,7 @@ export const onTransactionUpdated = functions.firestore
                     title: "取引キャンセル",
                     body: `「${itemTitle}」の取引がキャンセルされました。`,
                     link: `/transactions/detail?id=${transactionId}`,
-                    createdAt: admin.firestore.Timestamp.now(),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     read: false
                 });
                 if (buyerEmail) await sendEmail(buyerEmail, subject, `購入者様\n\n${text}`);
@@ -267,7 +267,7 @@ export const onTransactionUpdated = functions.firestore
                     title: "取引キャンセル",
                     body: `「${itemTitle}」の取引がキャンセルされました。`,
                     link: `/transactions/detail?id=${transactionId}`,
-                    createdAt: admin.firestore.Timestamp.now(),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     read: false
                 });
                 if (sellerEmail) await sendEmail(sellerEmail, subject, `出品者様\n\n${text}`);
