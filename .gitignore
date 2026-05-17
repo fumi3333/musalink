@@ -36,6 +36,8 @@ yarn-error.log*
 firebase-debug.log*
 *-key.json
 service-account.json
+serviceAccountKey.json
+functions/serviceAccountKey.json
 
 # env files (can opt-in for committing if needed)
 .env*
