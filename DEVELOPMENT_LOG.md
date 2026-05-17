@@ -47,6 +47,35 @@
 
 ---
 
+### 追加修正・機能追加（同日 セッション2）
+
+**背景**: 初回精査に続き、残課題の修正と機能追加を実施。
+
+**QR エラー文字列の正規化**:
+- [components/transaction/QRCodeScanner.tsx](components/transaction/QRCodeScanner.tsx): `html5-qrcode` のエラーコールバックは生のブラウザ文字列 (`"NotAllowedError: Permission denied"` 等) を返す。HandoverSection は `'camera_denied'` / `'camera_unavailable'` という enum 文字列で受け取る設計だったためカメラ権限拒否のUIが一切表示されなかった。コールバック内で正規化処理を追加し、`includes("NotAllowedError")` 等で判定してから enum を渡すように修正。catch ブロックも同様に対応。
+
+**createItem フェイク ID バグ**:
+- [services/firestore.ts](services/firestore.ts): `addDoc` を `withTimeout(2s, "mock_item_" + Date.now())` でラップしており、モバイルで Firestore 書き込みが 2秒超かかった場合にフェイク ID を返して「出品成功」と表示する致命的バグ。実際には商品が作成されていないのに成功に見える。`withTimeout` を完全削除し `addDoc` を直接 await。オフライン時は catch で日本語エラーを throw。
+
+**UX サイレント失敗の解消**:
+- [components/auth/OnboardingModal.tsx](components/auth/OnboardingModal.tsx): 初回ログイン時のプロフィール設定モーダルで × ボタンを押しても無言で何もしない（プロフィール未完了時は閉じられない仕様）。ユーザーがアプリが固まったと誤認する。DialogDescription に「設定が完了するまでダイアログは閉じられません。」の注記を追加。
+- [app/transactions/new/page.tsx](app/transactions/new/page.tsx): 問題報告ダイアログでテキストエリア空欄のまま送信ボタンを押すと無言で return。`toast.error("報告内容を入力してください")` を追加。
+
+**CLAUDE.md スリム化**:
+- 152行 → 82行。絶対ルール（法務・セキュリティ・インフラ）は完全維持。技術スタック早見表・現在の主要課題・詳細なワークフロー説明を削除（コードから自明、またはログに記録済み）。
+
+**通知メール Secret Manager 移行**:
+- [functions/src/notifications.ts](functions/src/notifications.ts): `functions.config().gmail.*` を使用していたが、Runtime Config API が 2026年3月にシャットダウン → メール送信が全件サイレントスキップされていた。`defineSecret("GMAIL_EMAIL")` / `defineSecret("GMAIL_PASSWORD")` に移行。`runWith({ secrets: [...] })` で各トリガーにバインド。Firebase Secret Manager に `hrf.mtd@gmail.com` と App Password を登録済み。
+
+**お問い合わせフォーム新設**（コンプライアンス監査 M-L3 対応）:
+- [functions/src/contact.ts](functions/src/contact.ts): Cloud Function `sendContactEmail` を新設。認証必須・1時間3回レート制限・Firestore `contacts` コレクションに保存・`hrf.mtd@gmail.com` にメール転送。
+- [app/contact/page.tsx](app/contact/page.tsx): カテゴリ選択（取引トラブル / 不正報告 / ご意見 / その他）+ メッセージ、送信後完了画面。
+- [components/layout/Footer.tsx](components/layout/Footer.tsx): `mailto:support@musalink.jp` → `/contact` ページリンクに変更。
+
+**コミット**: 8ddf67f (CLAUDE.md), 076d6d3 (QR + createItem), 58837e0 (UX silent failures), 5b56289 (Secret Manager migration), 15c8cd4 (contact form)
+
+---
+
 ## 2026-05-17 (3rd entry)
 
 ### ログインフロー修正 + 大規模リファクタリング（チーム3）
