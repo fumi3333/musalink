@@ -55,10 +55,17 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScan, onError })
                         }
                     },
                     (errorMessage: string) => {
-                        // "No MultiFormat Readers" は QR が見つからない通常状態なので無視
-                        if (onError && errorMessage && !errorMessage.includes("No MultiFormat Readers")) {
-                            onError(errorMessage);
-                        }
+                        if (!onError || !errorMessage) return;
+                        // QR が見つからない通常状態は無視（毎フレーム発火する）
+                        const scanNoise = errorMessage.includes("No MultiFormat Readers") ||
+                            errorMessage.includes("parse error") ||
+                            errorMessage.includes("No QR code");
+                        if (scanNoise) return;
+                        // カメラ権限拒否かどうかを正規化して親に伝える
+                        const isDenied = errorMessage.includes("NotAllowedError") ||
+                            errorMessage.includes("Permission denied") ||
+                            errorMessage.includes("Permission Denied");
+                        onError(isDenied ? 'camera_denied' : 'camera_unavailable');
                     }
                 );
             } catch (err: any) {

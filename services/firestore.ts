@@ -63,22 +63,14 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue: T): Prom
 
 export const createItem = async (item: Omit<Item, 'id'>) => {
     try {
-        // Try to add doc with 2s timeout, fallback to mock ID
-        const docRefId = await withTimeout(
-            addDoc(itemsRef, {
-                ...item,
-                createdAt: serverTimestamp(),
-            }).then(ref => ref.id),
-            2000,
-            "mock_item_" + Date.now()
-        );
-
-        return docRefId;
+        const docRef = await addDoc(itemsRef, {
+            ...item,
+            createdAt: serverTimestamp(),
+        });
+        return docRef.id;
     } catch (error: any) {
-        // ... (Offline handling)
         if (error.code === 'unavailable' || error.message?.includes('offline')) {
-            console.warn("Firestore offline (createItem), simulating success.");
-            return "mock_item_" + Date.now();
+            throw new Error("インターネット接続が必要です。接続を確認してから再試行してください。");
         }
         console.error("Error creating item:", error);
         throw error;
