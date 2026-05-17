@@ -401,7 +401,7 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
     } catch (error: any) {
         console.error("[capturePayment] FATAL ERROR", error);
         if (error instanceof functions.https.HttpsError) throw error;
-        throw new functions.https.HttpsError('aborted', `Server Crash: ${error.message || 'Unknown Error'} (Stack: ${error.stack?.substring(0, 100)})`);
+        throw new functions.https.HttpsError('internal', '決済処理中にサーバーエラーが発生しました。しばらく待ってから再試行してください。');
     }
 });
 

@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface QRCodeScannerProps {
     onScan: (decodedText: string) => void;
-    onError?: (error: any) => void;
+    onError?: (error: string) => void;
 }
 
 export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScan, onError }) => {
@@ -29,42 +29,47 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScan, onError })
             
             try {
                 const { Html5QrcodeScanner } = await import('html5-qrcode');
-                
+
                 if (!isMounted || scannerRef.current) return;
 
                 const scanner = new Html5QrcodeScanner(
                     regionId,
-                    { 
-                        fps: 10, 
+                    {
+                        fps: 10,
                         qrbox: { width: 250, height: 250 },
                         aspectRatio: 1.0,
                         showTorchButtonIfSupported: true
                     },
                     /* verbose= */ false
                 );
-                
+
                 scannerRef.current = scanner;
 
                 scanner.render(
                     (decodedText: string) => {
-                        // Success Callback
                         if (!processedRef.current) {
                             processedRef.current = true;
-                            // Stop scanning after success
                             scanner.clear().catch((err: any) => console.error("Failed to clear scanner", err));
                             setScanResult(decodedText);
                             onScanRef.current(decodedText);
                         }
                     },
                     (errorMessage: string) => {
-                        // Error Callback
-                        if (onError && !errorMessage?.includes("No MultiFormat Readers")) {
-                            // onError(errorMessage); 
+                        // "No MultiFormat Readers" は QR が見つからない通常状態なので無視
+                        if (onError && errorMessage && !errorMessage.includes("No MultiFormat Readers")) {
+                            onError(errorMessage);
                         }
                     }
                 );
-            } catch (err) {
-                console.error("Failed to load html5-qrcode", err);
+            } catch (err: any) {
+                console.error("QRCodeScanner initialization failed:", err);
+                // カメラ権限拒否 or ブラウザ非対応
+                if (onError) {
+                    const msg = err?.name === 'NotAllowedError' || err?.message?.includes('Permission')
+                        ? 'camera_denied'
+                        : 'camera_unavailable';
+                    onError(msg);
+                }
             }
         };
 

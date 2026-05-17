@@ -26,6 +26,7 @@ export const HandoverSection: React.FC<HandoverSectionProps> = ({
     meetingPlace,
 }) => {
     const [scanKey, setScanKey] = useState(0);
+    const [cameraError, setCameraError] = useState<'denied' | 'unavailable' | null>(null);
 
     const qrValue = React.useMemo(
         () => JSON.stringify({ type: 'musalink_handover', txId: transaction.id }),
@@ -140,32 +141,57 @@ export const HandoverSection: React.FC<HandoverSectionProps> = ({
                             </div>
 
                             <div className="min-h-[300px] bg-black rounded-xl overflow-hidden relative border-4 border-slate-900">
-                                <QRCodeScanner
-                                    key={scanKey}
-                                    onScan={(decodedText) => {
-                                        try {
-                                            const data = JSON.parse(decodedText);
-                                            if (data.type === 'musalink_handover' && data.txId === transaction.id) {
-                                                handleCapturePayment();
-                                            } else {
-                                                toast.error("無効なQRコードです（別の取引コードの可能性があります）");
-                                                setTimeout(() => setScanKey(prev => prev + 1), 2000);
-                                            }
-                                        } catch (e) {
-                                            if (decodedText.includes(transaction.id)) {
-                                                handleCapturePayment();
-                                            } else {
-                                                toast.error("QRコードの形式が正しくありません");
-                                                setTimeout(() => setScanKey(prev => prev + 1), 2000);
-                                            }
-                                        }
-                                    }}
-                                    onError={(err) => console.log("Scan error", err)}
-                                />
-
-                                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent text-white text-center pointer-events-none">
-                                    <p className="font-bold text-sm">カメラを許可してスキャン</p>
-                                </div>
+                                {cameraError ? (
+                                    <div className="flex flex-col items-center justify-center h-[300px] p-6 text-center space-y-3">
+                                        <p className="text-2xl">📷</p>
+                                        <p className="text-white font-bold text-sm">
+                                            {cameraError === 'denied'
+                                                ? 'カメラのアクセスが拒否されています'
+                                                : 'カメラを起動できませんでした'}
+                                        </p>
+                                        <p className="text-slate-400 text-xs leading-relaxed">
+                                            {cameraError === 'denied'
+                                                ? 'ブラウザの設定 → このサイトの設定 → カメラを「許可」に変更してから再試行してください。'
+                                                : 'カメラが接続されていないか、他のアプリが使用中です。'}
+                                        </p>
+                                        <button
+                                            onClick={() => { setCameraError(null); setScanKey(prev => prev + 1); }}
+                                            className="mt-2 px-4 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700"
+                                        >
+                                            再試行
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <QRCodeScanner
+                                            key={scanKey}
+                                            onScan={(decodedText) => {
+                                                try {
+                                                    const data = JSON.parse(decodedText);
+                                                    if (data.type === 'musalink_handover' && data.txId === transaction.id) {
+                                                        handleCapturePayment();
+                                                    } else {
+                                                        toast.error("無効なQRコードです（別の取引コードの可能性があります）");
+                                                        setTimeout(() => setScanKey(prev => prev + 1), 2000);
+                                                    }
+                                                } catch {
+                                                    toast.error("QRコードの形式が正しくありません");
+                                                    setTimeout(() => setScanKey(prev => prev + 1), 2000);
+                                                }
+                                            }}
+                                            onError={(err) => {
+                                                if (err === 'camera_denied') {
+                                                    setCameraError('denied');
+                                                } else if (err === 'camera_unavailable') {
+                                                    setCameraError('unavailable');
+                                                }
+                                            }}
+                                        />
+                                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent text-white text-center pointer-events-none">
+                                            <p className="font-bold text-sm">カメラを許可してスキャン</p>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {process.env.NODE_ENV === 'development' && (

@@ -181,7 +181,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             setUserData({ ...newPublicData, ...newPrivateData, id: firebaseUser.uid });
                         }
                     } catch (e: any) {
-                        console.warn("Fetch user data error:", e);
+                        console.error("Fetch user data error:", e);
+                        setError("ユーザー情報の読み込みに失敗しました。ページを再読み込みしてください。");
+                        toast.error("ユーザー情報の読み込みに失敗しました", {
+                            description: "ページを再読み込みするか、時間をおいて再度ログインしてください。",
+                            duration: 8000,
+                        });
                     }
 
             } else {
@@ -275,7 +280,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = async () => {
         try {
-            localStorage.removeItem('debug_user_role');
             await signOut(auth);
             setUser(null);
             setUserData(null);

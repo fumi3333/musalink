@@ -6,6 +6,7 @@ import { ItemCard } from '@/components/listing/ItemCard';
 import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw, Search } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { getItems } from '@/services/firestore';
 import {
     Select,
@@ -33,7 +34,7 @@ export default function ItemListView() {
             setItems(data);
         } catch (e) {
             console.error(e);
-            alert("データの取得に失敗しました");
+            toast.error("商品データの取得に失敗しました", { description: "通信状態を確認してから再試行してください。" });
         } finally {
             setLoading(false);
         }
