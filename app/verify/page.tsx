@@ -53,7 +53,9 @@ export default function VerificationPage() {
             if (result.data.success) {
                 toast.success("本人確認が完了しました！");
                 setIsVerified(true);
-                setTimeout(() => router.push('/seller/payout'), 1500);
+                // AuthContext は getDoc 一回限りで userData を読むので、
+                // is_verified=true を反映させるためにフルリロードで遷移する。
+                setTimeout(() => { window.location.href = '/seller/payout'; }, 1500);
             } else {
                 throw new Error('Verification did not return success');
             }

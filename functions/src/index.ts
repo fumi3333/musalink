@@ -275,12 +275,23 @@ export const verifyUserIdentity = functions.https.onCall(async (data, context) =
         const userRef = db.collection('users').doc(uid);
         const privateRef = userRef.collection('private_data').doc('profile');
 
-        const batch = db.batch();
-        batch.set(userRef, {
+        const userSnap = await userRef.get();
+        const isFirstVerify = !userSnap.exists || !userSnap.data()?.is_verified;
+
+        const publicUpdate: any = {
             id: uid,
             is_verified: true,
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        };
+
+        // 初回 verify 時に trust_score / ratings を初期化（lockdown フィールドなのでサーバー側で）
+        if (isFirstVerify) {
+            publicUpdate.trust_score = 5.0;
+            publicUpdate.ratings = { count: 0, sum: 0 };
+        }
+
+        const batch = db.batch();
+        batch.set(userRef, publicUpdate, { merge: true });
         batch.set(privateRef, {
             student_id: studentId,
             university_email: email,
@@ -288,7 +299,7 @@ export const verifyUserIdentity = functions.https.onCall(async (data, context) =
         }, { merge: true });
         await batch.commit();
 
-        console.log(`[verifyUserIdentity] User ${uid} verified with student_id ${studentId}`);
+        console.log(`[verifyUserIdentity] User ${uid} verified with student_id ${studentId} (firstVerify: ${isFirstVerify})`);
         return { success: true, student_id: studentId };
     } catch (e) {
         return handleCallableError(e, "verifyUserIdentity");

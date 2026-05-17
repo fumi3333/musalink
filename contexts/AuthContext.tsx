@@ -106,19 +106,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             const privateUpdates: any = {};
 
                             if (!finalUserData.universityId) publicUpdates.universityId = universityId;
-                            
+
                             // Grade Calculation
                             if (!finalUserData.grade) {
                                 const derivedGrade = calculateGrade(email);
                                 if (derivedGrade !== "不明") publicUpdates.grade = derivedGrade;
                             }
                             if (!finalUserData.departmentId) publicUpdates.departmentId = "不明";
-                            
+
                             // Private: Ensure email is sync
                             if (finalUserData.email !== email) privateUpdates.email = email;
 
-                            // Public: Set is_verified = true (since we checked domain)
-                            if (!finalUserData.is_verified) publicUpdates.is_verified = true;
+                            // 2026-05-17: is_verified / trust_score などは server-only field.
+                            // クライアントから書こうとすると Firestore Rules で拒否されるため
+                            // /verify ページの verifyUserIdentity Cloud Function に委譲する。
 
                             // Apply Updates
                             if (Object.keys(publicUpdates).length > 0) {
@@ -139,13 +140,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             const universityId = getUniversityFromEmail(email);
                             const derivedGrade = calculateGrade(email);
 
+                            // 2026-05-17: is_verified / trust_score は server-only field.
+                            // 新規 user doc 作成時にこれらを含めると Firestore Rules の
+                            // create allow !request.resource.data.keys().hasAny(userServerOnlyFields()) で拒否される。
+                            // → /verify ページの Cloud Function 経由で後から付与する。
                             const newPublicData = {
                                 isProfileComplete: false,
-                                is_verified: true,
                                 universityId: universityId || "不明",
                                 grade: derivedGrade !== "不明" ? derivedGrade : "不明",
                                 departmentId: "不明",
-                                trust_score: 5.0,
                                 created_at: new Date()
                             };
 
