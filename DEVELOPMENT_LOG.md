@@ -4,6 +4,49 @@
 
 ---
 
+## 2026-05-18
+
+### セキュリティ監査 + バグ修正（ベータテスト当日）
+
+**背景**: ベータテスト(5/18)前にログイン・出品・購入・決済・カメラ起動の5フローを全精査した。Explore エージェントによる初回監査 → 実コード照合で偽陽性を除去 → 実在バグのみ修正。
+
+**修正内容**:
+
+**Next.js セキュリティアップデート**:
+- `16.1.1 → 16.2.6` — GitHub Dependabot 検出の critical 3件 (DoS/SSRF)
+
+**S1: stripe.ts — スタックトレース漏洩**:
+- [functions/src/stripe.ts](functions/src/stripe.ts): `capturePayment` エラー時に `error.stack` をクライアントへ返していた → ユーザー向け日本語メッセージのみに変更。詳細はサーバーログ (`console.error`) のみ。
+
+**S3: AuthContext.tsx — dead code 削除**:
+- [contexts/AuthContext.tsx](contexts/AuthContext.tsx): `logout()` 内の `localStorage.removeItem('debug_user_role')` を削除。対応する読み込みコードはどこにも存在しなかった。
+
+**U1/U2: QR スキャン + カメラエラー対応**:
+- [components/transaction/QRCodeScanner.tsx](components/transaction/QRCodeScanner.tsx): `initializeScanner` の catch で `onError` を呼ぶように修正。カメラ権限拒否 (`NotAllowedError`) を `camera_denied` として親に伝播。
+- [components/transaction/sections/HandoverSection.tsx](components/transaction/sections/HandoverSection.tsx): `cameraError` state 追加。権限拒否/起動失敗時に「設定でカメラを許可してください」+ 再試行ボタンを表示。JSON parse 失敗時の `includes()` フォールバックを削除 (strict JSON のみ)。
+
+**U3: AuthContext — Firestore エラー通知**:
+- [contexts/AuthContext.tsx](contexts/AuthContext.tsx): `onAuthStateChanged` 内の user data fetch 失敗時、`console.warn` のみだったを `toast.error` + `setError` に変更。ユーザーが「再読み込みを」と分かるように。
+
+**U4: items/page.tsx — alert() 廃止**:
+- [app/items/page.tsx](app/items/page.tsx): 商品一覧取得失敗時の `alert()` を `toast.error()` に統一。
+
+**DEVELOPMENT_LOG: 古いセクション削除**:
+- 2026-05-12 時点の「現在のプロジェクト状況」セクション（Stripe/楽天銀行の状況）を削除。情報が古くなっていた。
+
+**偽陽性だった指摘（修正不要と判断）**:
+- StripePaymentForm 二重送信: React 19 batching + disabled button で保護済み
+- Redirect + onAuthStateChanged race: 両者は独立して正しく動作している
+- ItemForm price name 属性: 既存コードに `name="price"` が正しく存在する
+- image upload timeout で loading が固まる: finally ブロックで setLoading(false) が動く
+
+**要後日対応（ベータ後）**:
+- Firestore Rules `isVerifiedStudent()` が `@musashino-u.ac.jp`（教職員）を通してしまう。UI gate は存在するが、Rules 直接呼び出しは防げていない。クロスドキュメント read で `is_verified` を確認するか、Custom Claim に昇格させる必要あり。
+
+**コミット**: 2307b6b (Next.js update), 92eeb9f (audit fixes)
+
+---
+
 ## 2026-05-17 (3rd entry)
 
 ### ログインフロー修正 + 大規模リファクタリング（チーム3）
