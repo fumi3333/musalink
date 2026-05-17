@@ -82,8 +82,7 @@ export const executeStripeConnect = functions.https.onRequest(async (req, res) =
             await batch.commit();
         }
 
-        const appUrl = functions.config().app?.url || "http://localhost:3000";
-        const itemsUrl = `${appUrl}/seller/payout`;
+        const itemsUrl = "https://musa-link.web.app/seller/payout";
 
         const accountLink = await stripe.accountLinks.create({
             account: accountId,
