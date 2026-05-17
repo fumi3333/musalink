@@ -82,54 +82,8 @@ export const onTransactionCreated = functions.firestore
         await sendEmail(sellerEmail, subject, text);
     });
 
-// 2. On Message Created -> Notify Recipient
-export const onMessageCreated = functions.firestore
-    .document('conversations/{conversationId}/messages/{messageId}')
-    .onCreate(async (snap: functions.firestore.QueryDocumentSnapshot, context: functions.EventContext) => {
-        const msg = snap.data();
-        const senderId = msg.senderId;
-        const conversationId = context.params.conversationId;
-
-        // Fetch Conversation to find Participants
-        const convDoc = await db.collection("conversations").doc(conversationId).get();
-        if (!convDoc.exists) return; // Should not happen
-        const conv = convDoc.data()!;
-
-        // Determine Recipient
-        // conv.participants is array [uid1, uid2]
-        const participants = conv.participants || [];
-        const recipientId = participants.find((uid: string) => uid !== senderId);
-
-        if (!recipientId) return;
-
-        // Fetch Recipient Email
-        const recipientDoc = await db.collection("users").doc(recipientId).get();
-        if (!recipientDoc.exists) return;
-        const recipient = recipientDoc.data()!;
-        const recipientEmail = recipient.university_email || recipient.email;
-
-        // Rate Limit / Spam Prevention Logic?
-        // Check local "Do Not Disturb"? (Skipped for MVP)
-
-        const msgPreview = (msg.text || '(メディア)').substring(0, 50);
-        const subject = `【Musalink】新着メッセージが届きました`;
-        const text = `${recipient.display_name}様\n\n取引相手からメッセージが届きました。\n\n「${msgPreview}${(msg.text || '').length > 50 ? '...' : ''}」\n\n返信はこちら:\nhttps://musa-link.web.app/transactions/detail?id=${conversationId}&openExternalBrowser=1#chat`;
-
-        // 1. Create In-App Notification
-        await db.collection("users").doc(recipientId).collection("notifications").add({
-            type: "message_received",
-            title: "新着メッセージ",
-            body: (msg.text || '(メディア)').substring(0, 30),
-            link: `/transactions/detail?id=${conversationId}#chat`,
-            createdAt: admin.firestore.Timestamp.now(),
-            read: false
-        });
-
-        // 2. Send Email
-        if (recipientEmail) {
-            await sendEmail(recipientEmail, subject, text);
-        }
-    });
+// 2. Message Notification: REMOVED for 電気通信事業法 compliance (2026-05-16)
+// Chat / messaging feature has been discontinued. No message-related triggers run.
 
 // 3. On Transaction Updated -> Notify Status Changes
 export const onTransactionUpdated = functions.firestore
@@ -157,7 +111,7 @@ export const onTransactionUpdated = functions.firestore
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
             const subject = `【Musalink】購入リクエストが承認されました！`;
-            const text = `${buyer.display_name}様\n\n「${itemTitle}」の購入リクエストが承認されました。\n\n以下のリンクから支払いを完了させてください。\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
+            const text = `${buyer.display_name}様\n\n「${itemTitle}」の購入リクエストが承認されました。\n\n以下のリンクから決済情報を入力し、利用枠の確保（仮押さえ）へお進みください。\n※実際の支払い確定は、対面で商品を受け取り QR コードを読み取ったタイミングで完了します。\n※24時間以内に次のステップへ進まない場合、自動的にキャンセルされます。\n\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
             // In-App
             await db.collection("users").doc(buyerId).collection("notifications").add({
@@ -188,7 +142,7 @@ export const onTransactionUpdated = functions.firestore
             const itemTitle = itemDoc.exists ? itemDoc.data()!.title : "商品";
 
             const subject = `【Musalink】支払いの枠確保が完了しました（${itemTitle}）`;
-            const text = `${seller.display_name}様\n\n「${itemTitle}」について、購入者がクレジットカードで支払いの仮押さえ（枠確保）を行いました。\n\nチャットで連絡を取り、キャンパス内で商品の受け渡しを行ってください。\n受け渡し時にあなたのスマホでQRコードを提示し、購入者に読み取ってもらうと売上が確定します。\n\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
+            const text = `${seller.display_name}様\n\n「${itemTitle}」について、購入者がクレジットカードで支払いの仮押さえ（枠確保）を行いました。\n\n取引詳細画面で受け渡し場所を確認し、キャンパス内で商品の受け渡しを行ってください。\n受け渡し時にあなたのスマホでQRコードを提示し、購入者に読み取ってもらうと売上が確定します。\n※24時間以内に受け渡しが完了しないと、取引は自動キャンセルされ、購入者のカード仮押さえも解除されます。\n\nhttps://musa-link.web.app/transactions/detail?id=${transactionId}&openExternalBrowser=1`;
 
             // In-App
             await db.collection("users").doc(sellerId).collection("notifications").add({

@@ -10,7 +10,7 @@ Version: 1.0.0 | Status: Live | 本番URL: https://musa-link.web.app/
 
 Musalink は、武蔵野大学の学生間で教科書や学修資料・生活用品などを安全かつ安価に循環させることを目的とした自主開発の C2C Web プラットフォームです。
 
-学内ドメイン制限による完全クローズドな認証環境と、Stripe Connect を用いたエスクロー決済フローを組み合わせることで、現実的な信頼性のもとで実現しています。
+学内ドメイン制限による完全クローズドな認証環境と、Stripe Connect を用いた安全な仮押さえ決済フローを組み合わせることで、現実的な信頼性のもとで実現しています。
 
 本プロジェクトは学生による完全な個人開発であり、大学の公式プロジェクトではありません。
 
@@ -93,9 +93,9 @@ if (!isAllowed) {
 }
 ```
 
-### 2. Stripe Connect を用いた C2C エスクロー決済フロー
+### 2. Stripe Connect を用いた C2C 安全決済フロー
 
-エスクローを実現するために `capture_method: 'manual'` の Payment Intent を使用し、決済の承認（Auth Hold）と実際の売上確定（Capture）を分離しています。
+安全な取引を実現するために `capture_method: 'manual'` の Payment Intent を使用し、決済の承認（Auth Hold）と実際の売上確定（Capture）を分離しています。
 
 ```
 [購入者が「支払う」] 

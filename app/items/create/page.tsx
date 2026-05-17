@@ -432,15 +432,19 @@ export default function CreateListingPage() {
                                     <Input 
                                         id="price" 
                                         name="price" 
-                                        type="number" 
-                                        className="pl-8 text-xl font-bold tracking-tight" 
-                                        placeholder="1000" 
-                                        min="300" 
-                                        required 
+                                        type="number"
+                                        className="pl-8 text-xl font-bold tracking-tight"
+                                        placeholder="1000"
+                                        min="300"
+                                        max="100000"
+                                        required
                                         onWheel={(e) => e.currentTarget.blur()}
                                     />
                                 </div>
-                                <p className="text-xs text-slate-500">※手数料は購入者が負担します。</p>
+                                <p className="text-xs text-slate-500">
+                                    ※サービス手数料 10%（最低50円）が販売価格から差し引かれて入金されます。<br />
+                                    例：1,000円で出品 → 出品者の受取額は 900円。
+                                </p>
                             </div>
 
                             <div className="space-y-2">

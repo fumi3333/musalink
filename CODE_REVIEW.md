@@ -22,7 +22,7 @@
 | フロント | Next.js 16 (App Router), React 19, TypeScript | 現代的。`output: 'export'` は後述の通り要確認。 |
 | 認証 | Firebase Auth (Google) | ドメイン制限はクライアント＋ルールの二重で妥当。 |
 | DB | Firestore | ルールで状態遷移・役割が整理されている。 |
-| 決済 | Stripe Connect, Payment Intents | エスクローは Functions 側で完結しており良い。 |
+| 決済 | Stripe Connect, Payment Intents | 仮押さえ決済は Functions 側で完結しており良い。 |
 | バックエンド | Cloud Functions (onRequest/onCall), Next.js API Routes | プロキシ構成で CORS を回避している。 |
 
 **ディレクトリ構成**: `app/`（ページ）、`components/`（UI・取引・チャット）、`contexts/`（Auth）、`services/`（firestore, analytics, books）、`lib/`（firebase, stripe, constants, utils）と役割が分かれており把握しやすい。

@@ -8,18 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Lock, Unlock, Copy, CheckCircle, AlertTriangle, Coins, ArrowRight, UserCheck } from 'lucide-react';
 import { RevealableContent } from './RevealableContent';
-import { calculateFee } from '@/lib/constants';
-
-function getTransactionStatusLabel(status: TransactionStatus): string {
-    switch (status) {
-        case 'request_sent': return '承認待ち';
-        case 'approved': return '支払い待ち';
-        case 'payment_pending': return '受渡待ち';
-        case 'completed': return '取引完了';
-        case 'cancelled': return 'キャンセル';
-        default: return status;
-    }
-}
+import { calculateFee, getTransactionStatusLabel } from '@/lib/constants';
 import { TransactionStepper } from './TransactionStepper';
 import { MeetingPlaceSelector } from './MeetingPlaceSelector';
 import { cn } from '@/lib/utils';
@@ -195,7 +184,7 @@ Musalinkで連絡先を確認しました。
                         <p className="mb-4 text-slate-600">
                             {isSeller
                                 ? "購入希望者がいます。評価などを確認し、問題なければ承認してください。承認すると買い手が決済に進めるようになります。"
-                                : "出品者が承認すると、手数料の支払いへ進めます。しばらくお待ちください。"
+                                : "出品者が承認すると、決済枠の確保（仮押さえ）へ進めます。しばらくお待ちください。"
                             }
                         </p>
 
@@ -252,8 +241,28 @@ Musalinkで連絡先を確認しました。
                                     <p className="font-bold text-violet-800 mb-2">① 決済枠の確保 (Reserve)</p>
                                     <p className="text-sm text-slate-600">
                                         クレジットカードの利用枠を確保します。<br />
-                                        手数料等はかかりません。
+                                        この段階ではまだ請求は確定しません。
                                     </p>
+                                </div>
+
+                                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 text-sm">
+                                    <p className="font-bold text-slate-800 mb-2">お支払い内訳</p>
+                                    <div className="flex justify-between text-slate-600">
+                                        <span>商品代金</span>
+                                        <span>¥{item.price.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-500 text-xs mt-1">
+                                        <span>うちサービス手数料（出品者から差引・10% / 最低50円）</span>
+                                        <span>¥{feeAmount.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-700 mt-2 pt-2 border-t border-slate-200">
+                                        <span>あなたのお支払い</span>
+                                        <span className="font-bold">¥{item.price.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-500 text-xs mt-1">
+                                        <span>出品者の受取額</span>
+                                        <span>¥{(item.price - feeAmount).toLocaleString()}</span>
+                                    </div>
                                 </div>
 
                                 {/* Meeting Place Selector (Before Reservation) */}
@@ -493,7 +502,7 @@ Musalinkで連絡先を確認しました。
                                         variant="outline" 
                                         size="sm"
                                         onClick={() => {
-                                            if (confirm("【警告】\n出品者の個人情報（学生番号・メール）を表示します。\n\n通常、取引はチャットのみで完了します。\n相手と連絡が取れないなどの「トラブル時のみ」使用してください。\n\n表示しますか？")) {
+                                            if (confirm("【警告】\n出品者の個人情報（学生番号・メール）を表示します。\n\n通常、取引は受け渡し場所・時間の確認だけで完了します。\n相手と連絡が取れないなどの「トラブル時のみ」使用してください。\n\n表示しますか？")) {
                                                 setShowSellerInfo(true);
                                             }
                                         }}

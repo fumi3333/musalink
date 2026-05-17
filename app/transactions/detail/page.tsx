@@ -5,22 +5,10 @@ import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getTransaction, getItem, getUser, updateTransactionStatus } from '@/services/firestore';
 import { Transaction, Item, User, TransactionStatus } from '@/types';
-// import { getTransactionStatusLabel } from '@/lib/constants';
-
-function getTransactionStatusLabel(status: TransactionStatus): string {
-    switch (status) {
-        case 'request_sent': return '承認待ち';
-        case 'approved': return '支払い待ち';
-        case 'payment_pending': return '受渡待ち';
-        case 'completed': return '取引完了';
-        case 'cancelled': return 'キャンセル';
-        default: return status;
-    }
-}
 import { TransactionDetailView } from '@/components/transaction/TransactionDetailView';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { useAuth } from '@/contexts/AuthContext';
-import { FUNCTIONS_BASE_URL } from '@/lib/constants';
+import { FUNCTIONS_BASE_URL, getTransactionStatusLabel } from '@/lib/constants';
 
 
 function TransactionDetailContent() {

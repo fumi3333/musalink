@@ -25,7 +25,7 @@ export default function PrivacyPage() {
                         <ul className="list-disc list-inside space-y-2 text-slate-600 text-sm leading-relaxed pl-2">
                             <li>認証情報（Googleアカウント連携によるメールアドレス、氏名、プロフィール画像）</li>
                             <li>プロフィール情報（ニックネーム、所属キャンパス、学部、興味タグ等）</li>
-                            <li>取引情報（出品データ、購入履歴、取引チャットの内容）</li>
+                            <li>取引情報（出品データ、購入履歴、取引ステータス、受け渡し場所等）</li>
                             <li>アクセスログ（IPアドレス、利用日時、デバイス情報等）</li>
                             <li>
                                 <span className="font-bold text-slate-700">注意:</span> クレジットカード情報は決済代行会社（Stripe）が直接取り扱い、当サービスのサーバーには保存されません。
@@ -115,10 +115,11 @@ export default function PrivacyPage() {
                             第7条（アクセス解析・Cookieについて）
                         </h2>
                         <p className="text-sm text-slate-600 leading-relaxed">
-                            当サービスはGoogle Firebase Analyticsを使用しており、ユーザーのアクセスデータ（IPアドレス・閲覧ページ・滞在時間等）を収集・分析しています。
-                            このデータはGoogleのプライバシーポリシーに基づき管理され、ユーザー個人を特定するために使用することはありません。<br />
+                            当サービスは、サービス改善のため Google Firebase Analytics の利用が可能です。アクセスデータ（IPアドレス・閲覧ページ・滞在時間等）を収集・分析する場合があり、収集はユーザー個人を特定するために使用しません。<br />
                             <br />
-                            また、当サービスはセッション管理・認証のためにCookieを使用しています。ブラウザの設定でCookieを無効にした場合、一部の機能が正常に動作しないことがあります。<br />
+                            <strong>同意の取得:</strong> 当サービスは、初回アクセス時に表示するバナーでユーザーから明示的に同意を得た場合にのみ、Firebase Analytics を初期化・実行します（電気通信事業法 第27条の12 に基づく対応）。同意は端末の localStorage に記録され、いつでも撤回できます。撤回方法は本ページ末尾のお問い合わせ窓口までご連絡ください。<br />
+                            <br />
+                            また、当サービスはセッション管理・認証のために必要最小限の Cookie を使用しています。ブラウザの設定でCookieを無効にした場合、一部の機能が正常に動作しないことがあります。<br />
                             <br />
                             <span className="text-xs text-slate-400">
                                 Googleのプライバシーポリシー: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-500">https://policies.google.com/privacy</a>

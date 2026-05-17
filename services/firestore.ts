@@ -281,16 +281,18 @@ export const updateTransactionStatus = async (
 ) => {
     try {
         const docRef = doc(db, "transactions", transactionId);
-        // Optimistic update - await but suppress offline error
         await updateDoc(docRef, {
             status,
             ...updates,
             updatedAt: serverTimestamp()
         });
     } catch (error: any) {
+        // 2026-05-16: 旧実装は offline 時に silent success を返していたが、UI には
+        // 「成功した」と見えるのにサーバーは未反映で他タブ・サーバー状態と乖離する
+        // 重大な事故になりうるため、明示的に日本語エラーで throw する。
         if (error.code === 'unavailable' || error.message?.includes('offline')) {
-            console.warn(`Transaction update failed (offline), ignoring: ${status}`);
-            return; // Simulate success
+            console.warn(`Transaction update failed (offline): ${status}`);
+            throw new Error("インターネット接続がありません。オンラインに戻ってから再度お試しください。");
         }
         console.error("Error updating transaction status:", error);
         throw error;

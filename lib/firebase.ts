@@ -23,13 +23,25 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const functions = getFunctions(app, 'us-central1');
 
+// Analytics: gated by explicit user consent (電気通信事業法 第27条の12 対応, 2026-05-16)
+// We only initialize Firebase Analytics after the user has accepted the cookie/analytics banner.
+// Consent flag is stored in localStorage under 'musalink_analytics_consent' = 'granted' | 'denied'.
 let analytics: any = null;
-if (typeof window !== "undefined") {
+export function initAnalyticsIfConsented() {
+    if (typeof window === "undefined") return;
+    if (analytics) return; // already initialised
+    const consent = window.localStorage.getItem("musalink_analytics_consent");
+    if (consent !== "granted") return;
     isSupported().then((supported) => {
         if (supported) {
             analytics = getAnalytics(app);
         }
     });
+}
+
+if (typeof window !== "undefined") {
+    // Best-effort: if user previously granted, initialise immediately on next load.
+    initAnalyticsIfConsented();
 }
 
 // Connect to Emulators if on localhost

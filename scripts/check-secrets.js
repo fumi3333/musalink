@@ -13,8 +13,10 @@ const FORBIDDEN_PATTERNS = [
     { pattern: /pk_live_[a-zA-Z0-9]+/, name: 'Stripe Publishable Key (Live)' },
     { pattern: /rk_test_[a-zA-Z0-9]+/, name: 'Stripe Restricted Key (Test)' },
     { pattern: /rk_live_[a-zA-Z0-9]+/, name: 'Stripe Restricted Key (Live)' },
-    // Prevent accidental exposure of secrets via NEXT_PUBLIC_
-    { pattern: /NEXT_PUBLIC_.*(SECRET|PASSWORD|KEY|TOKEN).*(?!=.*PUBLISHABLE)/i, name: 'Potential Secret exposed via NEXT_PUBLIC_' },
+    // Prevent accidental exposure of secrets via NEXT_PUBLIC_.
+    // Allow-list known-safe public keys (e.g. NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY, NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_APP_ID).
+    // Public Firebase config (api key/app id/etc.) is explicitly designed to ship to the browser, so it is excluded here.
+    { pattern: /NEXT_PUBLIC_(?!.*(PUBLISHABLE|FIREBASE_API_KEY|FIREBASE_APP_ID|FIREBASE_MEASUREMENT_ID|FIREBASE_AUTH_DOMAIN|FIREBASE_STORAGE_BUCKET|FIREBASE_MESSAGING_SENDER_ID|FIREBASE_PROJECT_ID))[A-Z0-9_]*(SECRET|PASSWORD|TOKEN)/i, name: 'Potential Secret exposed via NEXT_PUBLIC_' },
 ];
 
 // Files to ignore (e.g. env files that are already gitignored but checking just in case, or specific config)

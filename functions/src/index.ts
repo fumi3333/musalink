@@ -392,8 +392,14 @@ async function processUnlock(transactionId: string, userId: string, paymentInten
         updatedAt: admin.firestore.Timestamp.now()
     });
 
-    // Deduct coin logic is REMOVED/SKIPPED for Direct Stripe Payment
-    // We only unlock.
+    // 3. Mark the item as sold so it disappears from listings and stays
+    // logically consistent ("matching" means still in negotiation).
+    if (itemDoc.exists) {
+        t.update(itemRef, {
+            status: 'sold',
+            updatedAt: admin.firestore.Timestamp.now()
+        });
+    }
 
     return { success: true, message: "Transaction unlocked." };
 }
@@ -546,76 +552,100 @@ export const capturePayment = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters', e.errors);
     }
 
-        return await db.runTransaction(async (t) => {
-            const txRef = db.collection("transactions").doc(transactionId);
-            const txDoc = await t.get(txRef);
+        // ===== Phase 1: Pre-flight (no Firestore Transaction yet) =====
+        // 取引と権限を確認してから Stripe を呼ぶ。Stripe API を Firestore Tx の
+        // 内側で呼ぶと、Stripe 遅延で Tx が 60s timeout に達した場合に
+        // 「Stripe では capture 済み / DB は未更新」という整合性破壊が起きるため。
+        const txRef = db.collection("transactions").doc(transactionId);
+        const initialDoc = await txRef.get();
+        if (!initialDoc.exists) {
+            console.error("[capturePayment] Transaction not found", transactionId);
+            throw new functions.https.HttpsError('not-found', "Transaction not found");
+        }
+        const initialTx = initialDoc.data()!;
 
+        if (initialTx.buyer_id !== callerId) {
+            console.error(`[capturePayment] Permission Denied: Caller ${callerId} !== Buyer ${initialTx.buyer_id}`);
+            throw new functions.https.HttpsError('permission-denied', "Only the buyer can capture/confirm receipt.");
+        }
+
+        // Idempotency: already completed → no-op success.
+        if (initialTx.status === 'completed') {
+            return { success: true };
+        }
+        if (initialTx.status !== 'payment_pending') {
+            console.error(`[capturePayment] Invalid Status: ${initialTx.status}`);
+            throw new functions.https.HttpsError('failed-precondition', `Status Error: ${initialTx.status} (Not pending)`);
+        }
+        if (!initialTx.payment_intent_id) {
+            throw new functions.https.HttpsError('failed-precondition', "No payment intent found.");
+        }
+
+        // ===== Phase 2: Stripe Capture (outside any Firestore Transaction) =====
+        try {
+            await stripe.paymentIntents.capture(initialTx.payment_intent_id, {
+                idempotencyKey: `pi_capture_${transactionId}`
+            });
+        } catch (stripeErr: any) {
+            console.error("[capturePayment] Stripe Capture Failed", stripeErr);
+            if (stripeErr.code === 'payment_intent_unexpected_state') {
+                // Already captured or in a non-capturable state — proceed to DB sync.
+                // (This is the idempotent re-run path.)
+            } else if (stripeErr.code === 'request_timeout' || (stripeErr.statusCode && stripeErr.statusCode >= 500)) {
+                throw new functions.https.HttpsError('unavailable', `Stripe temporarily unavailable: ${stripeErr.message}`);
+            } else {
+                throw new functions.https.HttpsError('aborted', `Stripe Error: ${stripeErr.message}`);
+            }
+        }
+
+        // ===== Phase 3: Firestore commit (Stripe is already done) =====
+        return await db.runTransaction(async (t) => {
+            const txDoc = await t.get(txRef);
             if (!txDoc.exists) {
-                console.error("[capturePayment] Transaction not found", transactionId);
-                throw new functions.https.HttpsError('not-found', "Transaction not found");
+                throw new functions.https.HttpsError('not-found', "Transaction not found (post-capture)");
             }
             const tx = txDoc.data()!;
 
-            // 2. Authorization Check
-            if (tx.buyer_id !== callerId) {
-                console.error(`[capturePayment] Permission Denied: Caller ${callerId} !== Buyer ${tx.buyer_id}`);
-                throw new functions.https.HttpsError('permission-denied', "Only the buyer can capture/confirm receipt.");
+            // Idempotency at the transaction boundary too (covers webhook race).
+            if (tx.status === 'completed' && tx.unlocked_assets) {
+                return { success: true, mode: 'live' };
             }
 
-            // 3. Status Check
-            if (tx.status !== 'payment_pending') {
-                // Idempotency
-                if (tx.status === 'completed') return { success: true };
-                
-                console.error(`[capturePayment] Invalid Status: ${tx.status}`);
-                throw new functions.https.HttpsError('failed-precondition', `Status Error: ${tx.status} (Not pending)`);
+            const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
+            const sellerPrivateDoc = await t.get(sellerPrivateRef);
+
+            let studentId = "unknown";
+            let universityEmail = "unknown";
+            if (sellerPrivateDoc.exists) {
+                const pd = sellerPrivateDoc.data()!;
+                studentId = pd.student_id;
+                universityEmail = pd.university_email;
             }
 
-            // 4. Execution (Real Stripe Capture)
-            if (!tx.payment_intent_id) {
-                throw new functions.https.HttpsError('failed-precondition', "No payment intent found.");
-            }
-            
-            try {
-                await stripe.paymentIntents.capture(tx.payment_intent_id);
-            } catch (stripeErr: any) {
-                console.error("[capturePayment] Stripe Capture Failed", stripeErr);
-                if (stripeErr.code !== 'payment_intent_unexpected_state') {
-                     throw new functions.https.HttpsError('aborted', `Stripe Error: ${stripeErr.message}`);
-                }
-            }
+            const itemRef = db.collection("items").doc(tx.item_id);
+            const itemDoc = await t.get(itemRef);
+            const itemPrice = itemDoc.exists ? itemDoc.data()!.price : 0;
+            const feeAmount = calculateFee(itemPrice);
 
-                // Unlock Logic (Real)
-                const sellerPrivateRef = db.collection("users").doc(tx.seller_id).collection("private_data").doc("profile");
-                const sellerPrivateDoc = await t.get(sellerPrivateRef);
-                
-                let studentId = "unknown";
-                let universityEmail = "unknown";
-                if (sellerPrivateDoc.exists) {
-                    const pd = sellerPrivateDoc.data()!;
-                    studentId = pd.student_id;
-                    universityEmail = pd.university_email;
-                }
+            t.update(txRef, {
+                status: 'completed',
+                fee_amount: feeAmount,
+                unlocked_assets: {
+                    student_id: studentId,
+                    university_email: universityEmail,
+                    unlockedAt: admin.firestore.Timestamp.now()
+                },
+                updatedAt: admin.firestore.Timestamp.now()
+            });
 
-                // Get item price to calculate fee
-                const itemRef = db.collection("items").doc(tx.item_id);
-                const itemDoc = await t.get(itemRef);
-                const itemPrice = itemDoc.exists ? itemDoc.data()!.price : 0;
-                const feeAmount = calculateFee(itemPrice);
-
-                t.update(txRef, {
-                    status: 'completed',
-                    fee_amount: feeAmount,
-                    unlocked_assets: {
-                        student_id: studentId,
-                        university_email: universityEmail,
-                        unlockedAt: admin.firestore.Timestamp.now()
-                    },
+            if (itemDoc.exists) {
+                t.update(itemRef, {
+                    status: 'sold',
                     updatedAt: admin.firestore.Timestamp.now()
                 });
-                
-                return { success: true, mode: 'live' };
+            }
 
+            return { success: true, mode: 'live' };
         });
     } catch (error: any) {
         console.error("[capturePayment] FATAL ERROR", error);
@@ -678,10 +708,12 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
 
         const tx = txDoc.data()!;
 
-        // Security: Check if caller is involved in transaction?
-        if (tx.buyer_id !== callerId && tx.seller_id !== callerId) {
-             console.warn(`Unlock attempt by unrelated user: ${callerId} for tx: ${transactionId}`);
-             res.status(403).json({ error: 'Permission denied: You are not a participant in this transaction.' });
+        // Security (2026-05-16): Only the BUYER can unlock/complete. The seller
+        // must not be able to capture funds on their own — that's a fraud vector
+        // (seller could capture before buyer scans QR / agrees to receive).
+        if (tx.buyer_id !== callerId) {
+             console.warn(`Unlock denied: caller ${callerId} is not buyer ${tx.buyer_id} (tx: ${transactionId})`);
+             res.status(403).json({ error: 'Permission denied: Only the buyer can complete this transaction.' });
              return;
         }
 
@@ -710,8 +742,9 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
             universityEmail = pd.university_email;
         }
 
-        // Update status to 'completed'
-        await txRef.update({
+        // Update status to 'completed' AND mark item as sold (in a batch for atomicity).
+        const batch = db.batch();
+        batch.update(txRef, {
             status: 'completed',
             unlocked_assets: {
                 student_id: studentId,
@@ -720,6 +753,13 @@ export const unlockTransaction = functions.https.onRequest(async (req, res) => {
             },
             updatedAt: admin.firestore.Timestamp.now()
         });
+        if (tx.item_id) {
+            batch.update(db.collection('items').doc(tx.item_id), {
+                status: 'sold',
+                updatedAt: admin.firestore.Timestamp.now()
+            });
+        }
+        await batch.commit();
 
         res.status(200).json({ success: true, message: 'Transaction unlocked' });
 
@@ -1028,12 +1068,10 @@ export const beforeSignIn = functions.auth.user().beforeSignIn((user, context) =
 
 // [Admin] Force Cancel Transaction
 export const adminCancelTransaction = functions.https.onCall(async (data, context) => {
-    // 1. Admin Check
-    // In production, verify custom claim: context.auth?.token.admin === true
-    // For MVP, check specific email or just allow if authenticated (since only Admin UI calls it? No, insecure)
-    // We'll use the hardcoded email check for now to match firestore.rules
-    const email = context.auth?.token.email;
-    if (email !== "admin@musashino-u.ac.jp" && email !== "fumi_admin@musashino-u.ac.jp") {
+    // 1. Admin Check (2026-05-16: hardened to require Custom Claim)
+    // Authoritative check: context.auth.token.admin === true (set via Admin SDK setCustomUserClaims)
+    // Email-based fallback removed — even if an admin email is compromised, no admin powers without the claim.
+    if (context.auth?.token.admin !== true) {
         throw new functions.https.HttpsError('permission-denied', 'Admin only.');
     }
 
@@ -1041,60 +1079,73 @@ export const adminCancelTransaction = functions.https.onCall(async (data, contex
     if (!transactionId) throw new functions.https.HttpsError('invalid-argument', 'Missing transactionId');
 
     try {
-        await db.runTransaction(async (t) => {
-            const txRef = db.collection('transactions').doc(transactionId);
-            const txDoc = await t.get(txRef);
-            if (!txDoc.exists) throw new functions.https.HttpsError('not-found', 'Transaction not found');
-            const tx = txDoc.data()!;
+        // ===== Phase 1: read tx without a Firestore Transaction =====
+        // Stripe API は時に遅いので、Firestore Transaction の 60s ウィンドウから外す。
+        const txRef = db.collection('transactions').doc(transactionId);
+        const initialDoc = await txRef.get();
+        if (!initialDoc.exists) throw new functions.https.HttpsError('not-found', 'Transaction not found');
+        const initialTx = initialDoc.data()!;
 
-            // 2. Stripe Payment Cancel/Refund (Before DB updates to ensure it works)
-            let stripeAction = "none";
-            if (tx.payment_intent_id) {
-                // Warning: Stripe API calls inside runTransaction is risky if they are slow (transaction timeout).
-                // However, we need to ensure Stripe is cancelled before we mark as cancelled in DB.
-                // Better approach: Call Stripe OUTSIDE transaction? 
-                // No, we want atomicity. But Firestore Tx timeout is 60s?
-                // Let's do it here for MVP simple consistency.
-                // Helper logic inline:
-                try {
-                    const pi = await stripe.paymentIntents.retrieve(tx.payment_intent_id);
-                    if (pi.status === 'requires_capture') {
-                        await stripe.paymentIntents.cancel(tx.payment_intent_id);
-                        stripeAction = "cancelled_auth";
-                    } else if (pi.status === 'succeeded') {
-                        await stripe.refunds.create({ payment_intent: tx.payment_intent_id });
-                        stripeAction = "refunded";
-                    } else {
-                        console.warn(`Stripe PI status is ${pi.status}, skipping action.`);
-                    }
-                } catch (stripeError: any) {
-                    console.error("Stripe Action Failed:", stripeError);
-                    // If Stripe fails, do we abort the DB cancel? Yes/No?
-                    // Yes, to keep state consistent.
-                    throw new functions.https.HttpsError('internal', "Stripe Cancellation Failed: " + stripeError.message);
+        // Idempotency: 既に cancelled なら no-op.
+        if (initialTx.status === 'cancelled') {
+            return { success: true };
+        }
+
+        // ===== Phase 2: Stripe operation (outside any Firestore Transaction) =====
+        let stripeAction = "none";
+        if (initialTx.payment_intent_id) {
+            try {
+                const pi = await stripe.paymentIntents.retrieve(initialTx.payment_intent_id);
+                if (pi.status === 'requires_capture') {
+                    await stripe.paymentIntents.cancel(initialTx.payment_intent_id, {
+                        idempotencyKey: `pi_cancel_${transactionId}`
+                    });
+                    stripeAction = "cancelled_auth";
+                } else if (pi.status === 'succeeded') {
+                    await stripe.refunds.create(
+                        { payment_intent: initialTx.payment_intent_id },
+                        { idempotencyKey: `pi_refund_${transactionId}` }
+                    );
+                    stripeAction = "refunded";
+                } else {
+                    console.warn(`Stripe PI status is ${pi.status}, skipping action.`);
+                    stripeAction = `skipped_${pi.status}`;
                 }
+            } catch (stripeError: any) {
+                console.error("[adminCancel] Stripe Action Failed:", stripeError);
+                // Stripe 側が失敗した場合、DB はそのままにして上位にエラーを返す。
+                // 管理者が再試行 → idempotency key で安全。
+                if (stripeError.code === 'request_timeout' || (stripeError.statusCode && stripeError.statusCode >= 500)) {
+                    throw new functions.https.HttpsError('unavailable', `Stripe temporarily unavailable: ${stripeError.message}`);
+                }
+                throw new functions.https.HttpsError('internal', `Stripe Cancellation Failed: ${stripeError.message}`);
             }
+        }
 
-            // 2. Cancel Transaction in DB
+        // ===== Phase 3: Firestore commit (Stripe already done) =====
+        await db.runTransaction(async (t) => {
+            const txDoc = await t.get(txRef);
+            if (!txDoc.exists) throw new functions.https.HttpsError('not-found', 'Transaction disappeared');
+            const tx = txDoc.data()!;
+            if (tx.status === 'cancelled') return; // race: someone else already cancelled.
+
             t.update(txRef, {
                 status: 'cancelled',
                 cancelledAt: admin.firestore.Timestamp.now(),
                 cancel_reason: reason || "admin_force_cancel",
-                stripeActionTaken: stripeAction // Audit log
+                stripeActionTaken: stripeAction
             });
 
-            // 3. Revert Item Status
             if (tx.item_id) {
                 const itemRef = db.collection('items').doc(tx.item_id);
                 t.update(itemRef, { status: 'listing' });
             }
-
-            // 4. Legacy Coin Logic Removed.
         });
 
         return { success: true };
     } catch (e: any) {
         console.error("Admin Cancel Error", e);
+        if (e instanceof functions.https.HttpsError) throw e;
         throw new functions.https.HttpsError('internal', e.message);
     }
 });
@@ -1126,56 +1177,12 @@ async function checkRateLimit(userId: string, action: string, limit: number, win
     });
 }
 
-// [Admin] Fix Seller Status Manually (requires admin auth)
-exports.fixSellerStatus = functions.https.onRequest(async (req, res) => {
-    // Admin authentication required
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-        res.status(401).send('Unauthorized: Missing auth token');
-        return;
-    }
-    try {
-        const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
-        const adminEmails = ["admin@musashino-u.ac.jp", "fumi_admin@musashino-u.ac.jp", "hrf.mtd@gmail.com"];
-        if (!adminEmails.includes(decoded.email || '')) {
-            res.status(403).send('Forbidden: Admin access only');
-            return;
-        }
-    } catch {
-        res.status(401).send('Unauthorized: Invalid token');
-        return;
-    }
-
-    const email = req.query.email as string;
-    if (!email) {
-        res.status(400).send("Missing email query param");
-        return;
-    }
-
-    try {
-        const userRecord = await admin.auth().getUserByEmail(email);
-        const uid = userRecord.uid;
-        const userRef = db.collection('users').doc(uid);
-        const userDoc = await userRef.get();
-
-        if (!userDoc.exists) {
-            res.status(404).send(`User doc not found for ${email} (${uid})`);
-            return;
-        }
-
-        const data = userDoc.data()!;
-        await userRef.update({
-            stripe_connect_id: data.stripe_connect_id || `acct_mock_${uid}`,
-            charges_enabled: true,
-            updatedAt: admin.firestore.Timestamp.now()
-        });
-
-        res.status(200).send(`Fixed seller status for ${email} (${uid}). Charges enabled.`);
-    } catch (error: any) {
-        console.error("Fix Seller Error", error);
-        res.status(500).send(error.message);
-    }
-});
+// [Admin] fixSellerStatus REMOVED (2026-05-16) - 本番にあってはいけない dev ショートカット
+// この関数は `acct_mock_${uid}` というモックの Stripe Connect ID を生成して
+// `charges_enabled: true` を手動セットしていた。管理者であれば任意ユーザーの
+// KYC を擬似的に通せてしまうため、本番デプロイ前に削除した。
+// 復旧用途で必要になった場合は、Stripe API 経由で実際の charges_enabled を
+// 読み戻して反映する別関数として、admin allow-list 付きで作り直すこと。
 
 // [Phase 2] Notifications
 export * from "./notifications";

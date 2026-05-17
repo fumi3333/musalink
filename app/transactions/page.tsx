@@ -9,17 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Loader2, Package, RefreshCw } from 'lucide-react';
-
-function getTransactionStatusLabel(status: TransactionStatus): string {
-    switch (status) {
-        case 'request_sent': return '承認待ち';
-        case 'approved': return '支払い待ち';
-        case 'payment_pending': return '受渡待ち'; // "Pending Payment" in system, but visually "Handover" for user
-        case 'completed': return '取引完了';
-        case 'cancelled': return 'キャンセル';
-        default: return status;
-    }
-}
+import { getTransactionStatusLabel } from '@/lib/constants';
 
 export default function TransactionListPage() {
     const { user } = useAuth();
