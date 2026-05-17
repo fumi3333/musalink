@@ -4,6 +4,49 @@
 
 ---
 
+## 2026-05-17 (3rd entry)
+
+### ログインフロー修正 + 大規模リファクタリング（チーム3）
+
+**背景**: ユーザーが「2つボタンがあって片方動かない気がする」と報告。実態は4つのログインボタンすべて同じ `login()` 関数を呼んでいたが、その関数のエラーハンドリングが矛盾していた。
+
+**Phase A — ログイン動作の修正**:
+- [contexts/AuthContext.tsx](contexts/AuthContext.tsx): `login()` の重複した `auth/configuration-not-found` ブランチを統合。1つ目で `return` してたので2つ目は dead code だった。
+- popup ブロック時に `signInWithRedirect` へフォールバック追加（LINE / Instagram 内ブラウザ対策）。
+- `getRedirectResult` を mount 時に呼んでリダイレクト完了を toast で通知。
+- `clearError` を context に expose、AuthButtons でダイアログクローズ時に reset するように。
+
+**Phase B — クリーンアップ**:
+- [services/analytics.ts](services/analytics.ts) 削除 — `analytics_logs` コレクションは Firestore Rules で許可されておらず、書き込みはずっと暗黙的失敗していた完全な dead code。
+- [lib/auth.ts](lib/auth.ts) から `signInWithGoogle()` / `logout()` 削除（未使用、AuthContext 側に同等品あり）。
+- 9ファイルの `@/contexts/AuthContext` import を `@/hooks/useAuth` に統一。
+- `SYSTEM_FEE_RATE` の dual-source を「同期義務」コメント付きで明文化。
+- `[Phase N]` マーカー削除。
+
+**Phase C1 — Cloud Functions 分割（1245行 → 6ファイル）**:
+- [functions/src/init.ts](functions/src/init.ts): admin / stripe / db の単一初期化
+- [functions/src/helpers.ts](functions/src/helpers.ts): applyCors, zod schemas, processUnlock, checkRateLimit
+- [functions/src/stripe.ts](functions/src/stripe.ts): Stripe Connect / Payment Intent / capture / webhook の6関数
+- [functions/src/transactions.ts](functions/src/transactions.ts): cancel / unlock / rate / admin cancel / cron sweep の5関数
+- [functions/src/identity.ts](functions/src/identity.ts): verifyUserIdentity
+- [functions/src/index.ts](functions/src/index.ts): re-export shell（30行）
+- デプロイ結果: 14関数すべて "Successful update operation"。関数名・URL 変更なし。
+
+**Phase C2 — TransactionDetailView 分割（668行 → 親135行 + 3セクション）**:
+- [components/transaction/sections/PaymentSection.tsx](components/transaction/sections/PaymentSection.tsx): approved 状態 (Stripe form)
+- [components/transaction/sections/HandoverSection.tsx](components/transaction/sections/HandoverSection.tsx): payment_pending 状態 (QR)
+- [components/transaction/sections/CompletedSection.tsx](components/transaction/sections/CompletedSection.tsx): completed 状態 (rating / report)
+
+**Phase C3 — items/create 分割（506行 → 親140行 + ItemForm）**:
+- [components/items/ItemForm.tsx](components/items/ItemForm.tsx): フォーム本体
+- [app/items/create/page.tsx](app/items/create/page.tsx): blocking gate UI のみ
+
+**コミット**: bcca84f, 1707576, 9d49297
+
+**学び**: field-lockdown のような横断的変更を入れた時は、即座に「クライアント側で書こうとしてる箇所」を grep で潰す。今回はそれが原因で AuthContext が壊れて出品が完全停止していた。
+
+---
+
 ## 2026-05-17 (2nd entry)
 
 ### 出品ボタンが押せないバグの修正（field-lockdown 連鎖事故）
