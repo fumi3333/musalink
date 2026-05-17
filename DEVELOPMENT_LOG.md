@@ -320,6 +320,18 @@ PR `claude/peaceful-pare-9bfd59` が走っている間に、main ブランチ上
   * state machine：buyer / seller どちらからも `payment_pending → completed` の直接遷移が拒否される（Cloud Functions のみ可）
 * **効果**: B4 / B5 / W5 のロジックが将来のリファクタリングで退行した際、CI / ローカルテストで即座に検知できる。
 
+#### 20. 🛠️ 【UX】Stripe Connect ページ — 手動再確認ボタン追加
+* **日付**: 2026-05-18
+* **対象**: [app/seller/payout/page.tsx](app/seller/payout/page.tsx)
+* **問題**: Stripe オンボーディングから戻った直後、`syncStripeStatus` が自動で 1 回走るが、まだ `charges_enabled` が `false` の場合ユーザーは「登録手続き中」と表示されたまま何もできない状態になっていた。
+* **対応**:
+  * `runSync()` を `useEffect` の外に切り出し、ボタンから再利用可能にした
+  * `syncedOnce` 状態を追加し「1回以上確認した後」だけガイダンスを表示
+  * 自動同期後にまだ未完了の場合、amber のガイダンスパネル（「登録を続けてください」説明文 ＋「ステータスを再確認する」ボタン）を表示
+  * toast フィードバック追加（成功 / 未完了 / エラー）
+  * `@/contexts/AuthContext` → `@/hooks/useAuth` に import を修正
+* **効果**: Stripe 登録手続き中のユーザーが詰まらず、次の操作（続行 or 確認）に誘導される
+
 ---
 
 ### 残課題（次セッションへの引き継ぎ）

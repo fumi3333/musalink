@@ -1,42 +1,50 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/hooks/useAuth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { auth } from "@/lib/firebase"
 import { getIdToken } from "firebase/auth"
 import { toast } from "sonner"
-import { CheckCircle, AlertTriangle, Loader2, ExternalLink } from "lucide-react"
+import { CheckCircle, AlertTriangle, Loader2, ExternalLink, RefreshCw } from "lucide-react"
 import { FUNCTIONS_BASE_URL } from "@/lib/constants"
 
 export default function PayoutPage() {
     const { userData, loading } = useAuth();
     const [connectingStripe, setConnectingStripe] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const [syncedOnce, setSyncedOnce] = useState(false);
+
+    const runSync = async () => {
+        if (!userData?.id || !userData?.stripe_connect_id) return;
+        if (userData?.charges_enabled) return;
+        setSyncing(true);
+        try {
+            const { httpsCallable } = await import('firebase/functions');
+            const { functions } = await import('@/lib/firebase');
+            const syncFn = httpsCallable(functions, 'syncStripeStatus');
+            const result = await syncFn({}) as any;
+            if (result.data?.charges_enabled) {
+                toast.success("Stripe連携が完了しました！ページを更新します...");
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                toast.info("まだ登録が完了していません。Stripeで手続きを続けてください。");
+            }
+        } catch (e) {
+            console.error("[syncStripeStatus] Error:", e);
+            toast.error("確認に失敗しました。時間をおいて再試行してください。");
+        } finally {
+            setSyncing(false);
+            setSyncedOnce(true);
+        }
+    };
 
     // Stripe から戻ってきたときに自動でステータスを同期
     useEffect(() => {
-        const syncStatus = async () => {
-            if (!userData?.id || !userData?.stripe_connect_id) return;
-            if (userData?.charges_enabled) return; // 既に有効なら不要
-            setSyncing(true);
-            try {
-                const { httpsCallable } = await import('firebase/functions');
-                const { functions } = await import('@/lib/firebase');
-                const syncFn = httpsCallable(functions, 'syncStripeStatus');
-                const result = await syncFn({}) as any;
-                if (result.data?.charges_enabled) {
-                    toast.success("Stripe連携が完了しました！ページを更新します...");
-                    setTimeout(() => window.location.reload(), 1500);
-                }
-            } catch (e) {
-                console.error("[syncStripeStatus] Error:", e);
-            } finally {
-                setSyncing(false);
-            }
-        };
-        syncStatus();
+        if (!userData?.id || !userData?.stripe_connect_id) return;
+        if (userData?.charges_enabled) return;
+        runSync();
     }, [userData?.id, userData?.stripe_connect_id, userData?.charges_enabled]);
 
     if (loading) return <div className="p-10 text-center">読み込み中...</div>;
@@ -57,7 +65,7 @@ export default function PayoutPage() {
                 <CardHeader>
                     <CardTitle className="text-sm font-bold">Stripeアカウント連携</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-4">
                     {/* Stripe Connect Status */}
                     <div className="bg-white border rounded-lg p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -86,7 +94,7 @@ export default function PayoutPage() {
                                 )}
                             </div>
                         </div>
-                        
+
                         {userData?.stripe_connect_id && userData?.charges_enabled ? (
                             /* オンボーディング完了 → Stripe ダッシュボードへ */
                             <Button variant="outline" size="sm" className="text-xs h-8" onClick={async () => {
@@ -95,14 +103,14 @@ export default function PayoutPage() {
                                 toast.info("ダッシュボードを開いています...");
                                 try {
                                     const createLink = httpsCallable(functions, 'createStripeLoginLink');
-                                    const res = await createLink({ 
-                                        accountId: userData.stripe_connect_id 
+                                    const res = await createLink({
+                                        accountId: userData.stripe_connect_id
                                     }) as any;
                                     if (res.data.error) throw new Error(res.data.error);
                                     window.location.href = res.data.url;
-                                } catch(e: any) { 
+                                } catch(e: any) {
                                     console.error(e);
-                                    toast.error("リンク作成エラー: " + e.message); 
+                                    toast.error("リンク作成エラー: " + e.message);
                                 }
                             }}>
                                 <ExternalLink className="w-3 h-3 mr-1" />
@@ -110,8 +118,8 @@ export default function PayoutPage() {
                             </Button>
                         ) : userData?.stripe_connect_id ? (
                             /* アカウントはあるがオンボーディング未完了 → 続きから */
-                            <Button 
-                                size="sm" 
+                            <Button
+                                size="sm"
                                 className="text-xs h-8 bg-amber-500 hover:bg-amber-600 text-white"
                                 disabled={connectingStripe}
                                 onClick={async () => {
@@ -165,15 +173,14 @@ export default function PayoutPage() {
                                 )}
                             </Button>
                         ) : (
-                            <Button 
-                                size="sm" 
+                            <Button
+                                size="sm"
                                 className="text-xs h-8 bg-[#635BFF] hover:bg-[#544DC8] text-white"
                                 disabled={connectingStripe}
                                 onClick={async () => {
                                     if(!userData?.id || connectingStripe) return;
                                     setConnectingStripe(true);
                                     const targetUrl = `${FUNCTIONS_BASE_URL}/executeStripeConnect`;
-                                    console.log("[Stripe Connect] Calling:", targetUrl, "from:", window.location.origin);
                                     try {
                                         if (!auth.currentUser) {
                                             throw new Error("ログインしていません。再度ログインしてください。");
@@ -195,7 +202,6 @@ export default function PayoutPage() {
 
                                         if (!res.ok) {
                                             const errorText = await res.text();
-                                            console.error("[Stripe Connect] Error response:", res.status, errorText);
                                             let errorMsg = `サーバーエラー (${res.status})`;
                                             try {
                                                 const errorJson = JSON.parse(errorText);
@@ -215,7 +221,7 @@ export default function PayoutPage() {
                                         console.error("[Stripe Connect] Error:", e);
                                         let userMessage = e.message || "不明なエラー";
                                         if (e instanceof TypeError && e.message.includes("fetch")) {
-                                            userMessage = `通信エラー: Cloud Function (${targetUrl}) に接続できませんでした。CORSまたはネットワークの問題の可能性があります。`;
+                                            userMessage = `通信エラー: Cloud Function (${targetUrl}) に接続できませんでした。`;
                                         }
                                         toast.error(userMessage, { duration: 8000 });
                                     } finally {
@@ -234,6 +240,26 @@ export default function PayoutPage() {
                             </Button>
                         )}
                     </div>
+
+                    {/* Stripe から戻ってきて charges_enabled がまだ false の場合のガイダンス */}
+                    {userData?.stripe_connect_id && !userData?.charges_enabled && syncedOnce && !syncing && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                            <p className="text-xs text-amber-800">
+                                Stripeの登録がまだ完了していません。「登録を続ける」から手続きを進めてください。
+                                手続き完了後にこのページへ戻ると自動で反映されます。
+                            </p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7 border-amber-400 text-amber-700 hover:bg-amber-100"
+                                disabled={syncing}
+                                onClick={runSync}
+                            >
+                                <RefreshCw className="w-3 h-3 mr-1" />
+                                ステータスを再確認する
+                            </Button>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
