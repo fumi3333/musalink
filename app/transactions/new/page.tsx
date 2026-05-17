@@ -142,7 +142,10 @@ function NewTransactionContent() {
                                             />
                                             <Button onClick={async () => {
                                                 const reasonEl = document.getElementById('report-reason-preview') as HTMLTextAreaElement;
-                                                if (!reasonEl.value) return;
+                                                if (!reasonEl.value) {
+                                                    toast.error("報告内容を入力してください");
+                                                    return;
+                                                }
                                                 try {
                                                     const { reportIssue } = await import('@/services/firestore');
                                                     await reportIssue('item', item.id, 'inappropriate_content', reasonEl.value); // Report Item

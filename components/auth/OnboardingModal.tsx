@@ -62,7 +62,8 @@ export function OnboardingModal() {
                     <DialogTitle>ようこそ Musalink へ！</DialogTitle>
                     <DialogDescription>
                         はじめに、プロフィールを設定してください。<br />
-                        <span className="text-xs text-slate-500">※本名は入力しないでください。後で変更可能です。</span>
+                        <span className="text-xs text-slate-500">※本名は入力しないでください。後で変更可能です。</span><br />
+                        <span className="text-xs text-amber-600">設定が完了するまでダイアログは閉じられません。</span>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
