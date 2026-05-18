@@ -23,8 +23,8 @@ export default function TradePage() {
                                 <span>販売業者・運営者</span>
                             </div>
                             <div className="md:col-span-3 text-slate-800">
-                                Musalink 運営事務局<br />
-                                <span className="text-xs text-slate-400">※本サービスは武蔵野大学の学生有志による開発・運営プロジェクトであり、大学法人とは直接関係ありません。</span>
+                                松田 晴史（屋号：Zax）<br />
+                                <span className="text-xs text-slate-400">※本サービスは個人事業主が運営するプラットフォームであり、武蔵野大学とは直接関係ありません。</span>
                             </div>
                         </div>
 
@@ -35,8 +35,8 @@ export default function TradePage() {
                                 <span>所在地</span>
                             </div>
                             <div className="md:col-span-3 text-slate-800">
-                                東京都江東区有明3-3-3<br />
-                                <span className="text-xs text-slate-400">※運営拠点の住所です。対面での対応は行っておりません。</span>
+                                ※請求があった場合は遅滞なく開示いたします。<br />
+                                <span className="text-xs text-slate-400">特定商取引法第11条に基づき、書面による請求があった場合に開示します。</span>
                             </div>
                         </div>
 
@@ -63,7 +63,7 @@ export default function TradePage() {
                             </div>
                             <div className="md:col-span-3 text-slate-800">
                                 各商品ページに記載された価格（税込）に基づきます。<br />
-                                サービス利用料：現在はベータ版のため無料です。
+                                サービス利用料：販売価格の10%（決済処理料込み）
                             </div>
                         </div>
 

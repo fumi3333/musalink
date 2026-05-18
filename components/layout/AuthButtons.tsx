@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { User as UserIcon, LogIn, AlertCircle, Bell } from 'lucide-react';
+import { User as UserIcon, LogIn, AlertCircle, Bell, Home, Tag, Package, Camera, Wallet, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import {
     Dialog,
@@ -135,8 +135,8 @@ export const AuthButtons = () => {
                                 <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
                                 <div className="flex items-center gap-2 mt-1">
                                     {isVerified ? (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                            ✅ 本人確認済み
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                            <CheckCircle className="w-3 h-3" />本人確認済み
                                         </span>
                                     ) : (
                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
@@ -151,7 +151,7 @@ export const AuthButtons = () => {
                                 className="flex items-center gap-2 text-sm text-slate-700 font-bold hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
                                 onClick={() => setMenuOpen(false)}
                             >
-                                <span className="text-lg">🏠</span>
+                                <Home className="w-4 h-4" />
                                 マイページ
                             </Link>
 
@@ -160,7 +160,7 @@ export const AuthButtons = () => {
                                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
                                 onClick={() => setMenuOpen(false)}
                             >
-                                <span className="text-lg">🏷️</span>
+                                <Tag className="w-4 h-4" />
                                 出品した商品
                             </Link>
 
@@ -169,7 +169,7 @@ export const AuthButtons = () => {
                                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
                                 onClick={() => setMenuOpen(false)}
                             >
-                                <span className="text-lg">📦</span>
+                                <Package className="w-4 h-4" />
                                 取引一覧
                             </Link>
 
@@ -178,7 +178,7 @@ export const AuthButtons = () => {
                                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
                                 onClick={() => setMenuOpen(false)}
                             >
-                                <span className="text-lg">📷</span>
+                                <Camera className="w-4 h-4" />
                                 出品する
                             </Link>
 
@@ -187,7 +187,7 @@ export const AuthButtons = () => {
                                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
                                 onClick={() => setMenuOpen(false)}
                             >
-                                <span className="text-lg">💰</span>
+                                <Wallet className="w-4 h-4" />
                                 売上・口座管理
                             </Link>
 
@@ -196,7 +196,7 @@ export const AuthButtons = () => {
                                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
                                 onClick={() => setMenuOpen(false)}
                             >
-                                <span className="text-lg">🔔</span>
+                                <Bell className="w-4 h-4" />
                                 お知らせ
                                 {unreadNotifications > 0 && (
                                     <span className="ml-auto bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5">

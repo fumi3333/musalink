@@ -1,8 +1,10 @@
 "use client";
 
+"use client";
 import React from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { ShoppingBag, Tag, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 
 export default function GuidePage() {
@@ -11,7 +13,7 @@ export default function GuidePage() {
             <h1 className="text-3xl font-bold text-slate-900 mb-6">ご利用ガイド・よくある質問</h1>
             
             <section className="mb-10">
-                <h2 className="text-xl font-bold text-violet-700 mb-4 border-b border-violet-100 pb-2">📦 購入について</h2>
+                <h2 className="text-xl font-bold text-violet-700 mb-4 border-b border-violet-100 pb-2 flex items-center gap-2"><ShoppingBag className="w-5 h-5" />購入について</h2>
                 <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="item-1">
                         <AccordionTrigger>購入の流れを教えてください</AccordionTrigger>
@@ -36,13 +38,12 @@ export default function GuidePage() {
             </section>
 
             <section className="mb-10">
-                <h2 className="text-xl font-bold text-amber-600 mb-4 border-b border-amber-100 pb-2">🏷️ 出品・売上について</h2>
+                <h2 className="text-xl font-bold text-amber-600 mb-4 border-b border-amber-100 pb-2 flex items-center gap-2"><Tag className="w-5 h-5" />出品・売上について</h2>
                 <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="sell-1">
                         <AccordionTrigger>出品手数料はかかりますか？</AccordionTrigger>
                         <AccordionContent>
-                            現在はベータ版のため、手数料は無料キャンペーン中です。<br />
-                            (将来的にシステム利用料が発生する可能性があります)
+                            販売価格の10%（決済処理料を含む）がシステム利用料として差し引かれます。購入者への請求は商品代金のみです。
                         </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="sell-2">
@@ -57,13 +58,12 @@ export default function GuidePage() {
             </section>
 
             <section className="mb-10">
-                <h2 className="text-xl font-bold text-slate-700 mb-4 border-b border-slate-100 pb-2">❓ トラブル・その他</h2>
+                <h2 className="text-xl font-bold text-slate-700 mb-4 border-b border-slate-100 pb-2 flex items-center gap-2"><HelpCircle className="w-5 h-5" />トラブル・その他</h2>
                 <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="other-1">
                         <AccordionTrigger>取引相手と連絡が取れません</AccordionTrigger>
                         <AccordionContent>
-                            取引詳細画面の「チャット」機能を使ってメッセージ送ってください。<br />
-                            それでも返信がない場合は、運営までお問い合わせください。
+                            取引詳細画面から運営へのお問い合わせが可能です。また、受け渡し日時や場所は事前に決めておくとスムーズです。
                         </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="other-2">
@@ -79,7 +79,7 @@ export default function GuidePage() {
             <div className="bg-slate-50 p-6 rounded-xl text-center">
                 <p className="text-slate-600 mb-4">解決しない場合はこちら</p>
                 <Button variant="outline" asChild>
-                    <a href="mailto:support@musalink.jp">
+                    <a href="mailto:hrf.mtd@gmail.com">
                         運営にお問い合わせ
                     </a>
                 </Button>

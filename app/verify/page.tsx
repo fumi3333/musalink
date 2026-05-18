@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { extractStudentId } from '@/lib/studentId';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function VerificationPage() {
     const router = useRouter();
@@ -107,7 +107,7 @@ export default function VerificationPage() {
 
                     {isVerified ? (
                         <div className="text-center py-6">
-                            <div className="text-4xl mb-4">✅</div>
+                            <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
                             <h2 className="text-lg font-bold text-slate-700">認証済みです</h2>
                             <p className="text-slate-500 mb-6">次は売上受け取り口座の設定です。</p>
                             <Button onClick={() => router.push('/seller/payout')} className="w-full">
