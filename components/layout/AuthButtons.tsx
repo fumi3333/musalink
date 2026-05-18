@@ -11,13 +11,18 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const AuthButtons = () => {
     const { user, userData, login, logout, loading, error, clearError, unreadNotifications } = useAuth();
     const [showErrorDialog, setShowErrorDialog] = useState(false);
-    const [menuOpen, setMenuOpen] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     // Watch for errors returned by useAuth
@@ -33,7 +38,7 @@ export const AuthButtons = () => {
         if (!open) clearError();
     };
 
-    const isVerified = user?.email?.endsWith('@stu.musashino-u.ac.jp');
+    const isVerified = user?.email?.endsWith('@stu.musashino-u.ac.jp') || userData?.is_verified === true;
 
     if (loading) return <div className="text-xs text-slate-400 px-2">読み込み中...</div>;
 
@@ -102,7 +107,6 @@ export const AuthButtons = () => {
     return (
         <div className="flex items-center gap-4">
 
-
             {/* Notification Bell */}
             <Link href="/notifications">
                 <Button variant="ghost" size="icon" className="text-slate-600 hover:text-violet-600 relative">
@@ -113,118 +117,93 @@ export const AuthButtons = () => {
                 </Button>
             </Link>
 
-            {/* User Menu Toggle */}
-            <Button
-                variant="ghost"
-                size="sm"
-                className="text-slate-600 hover:text-violet-600 gap-2 px-2"
-                onClick={() => setMenuOpen(!menuOpen)}
-            >
-                                {/* Show Nickname or Masked Email on Desktop */}
-                <span className="hidden md:inline-block text-xs font-bold text-slate-700 max-w-[150px] truncate">
-                    {userData?.display_name || user.displayName || "ゲスト"}
-                </span>
+            {/* User Menu — Radix DropdownMenu でポータル経由レンダリングするため外クリックで確実に閉じる */}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-slate-600 hover:text-violet-600 gap-2 px-2"
+                    >
+                        <span className="hidden md:inline-block text-xs font-bold text-slate-700 max-w-[150px] truncate">
+                            {userData?.display_name || user.displayName || "ゲスト"}
+                        </span>
+                        <div className="relative">
+                            <UserIcon className="w-5 h-5" />
+                            {isVerified && (
+                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></span>
+                            )}
+                        </div>
+                    </Button>
+                </DropdownMenuTrigger>
 
-                <div className="relative">
-                    <UserIcon className="w-5 h-5" />
-                    {isVerified && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></span>
-                    )}
-                </div>
-            </Button>
-
-            {menuOpen && (
-                <>
-                    <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setMenuOpen(false)}
-                    />
-                    <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="flex flex-col space-y-3">
-                            <div className="pb-3 border-b border-slate-100">
-                                <p className="text-sm font-bold text-slate-800 truncate">{userData?.display_name || user.displayName || "ゲスト"}</p>
-                                <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    {isVerified ? (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                            ✅ 本人確認済み
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                                            未確認
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <Link
-                                href="/mypage"
-                                className="flex items-center gap-2 text-sm text-slate-700 font-bold hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
-                                onClick={() => setMenuOpen(false)}
-                            >
-                                <span className="text-lg">🏠</span>
-                                マイページ
-                            </Link>
-
-                            <Link
-                                href="/mypage?tab=selling"
-                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
-                                onClick={() => setMenuOpen(false)}
-                            >
-                                <span className="text-lg">🏷️</span>
-                                出品した商品
-                            </Link>
-
-                            <Link
-                                href="/mypage?tab=purchase"
-                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
-                                onClick={() => setMenuOpen(false)}
-                            >
-                                <span className="text-lg">📦</span>
-                                取引一覧
-                            </Link>
-
-                            <Link
-                                href="/items/create"
-                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
-                                onClick={() => setMenuOpen(false)}
-                            >
-                                <span className="text-lg">📷</span>
-                                出品する
-                            </Link>
-
-                            <Link
-                                href="/seller/payout"
-                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
-                                onClick={() => setMenuOpen(false)}
-                            >
-                                <span className="text-lg">💰</span>
-                                売上・口座管理
-                            </Link>
-
-                            <Link
-                                href="/notifications"
-                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 p-2 hover:bg-slate-50 rounded transition-colors"
-                                onClick={() => setMenuOpen(false)}
-                            >
-                                <span className="text-lg">🔔</span>
-                                お知らせ
-                                {unreadNotifications > 0 && (
-                                    <span className="ml-auto bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5">
-                                        {unreadNotifications}
+                <DropdownMenuContent align="end" className="w-64 p-3">
+                    {/* ユーザー情報ヘッダー */}
+                    <div className="pb-3 mb-1 border-b border-slate-100">
+                        <p className="text-sm font-bold text-slate-800 truncate">
+                            {userData?.display_name || user.displayName || "ゲスト"}
+                        </p>
+                        <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
+                        <div className="mt-1">
+                            {isVerified ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                    ✅ 本人確認済み
+                                </span>
+                            ) : (
+                                <Link href="/verify">
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 cursor-pointer hover:bg-amber-200">
+                                        ⚠️ 在学確認が必要
                                     </span>
-                                )}
-                            </Link>
-
-                            <div className="border-t border-slate-100 pt-2">
-                                <Button variant="ghost" className="w-full justify-start text-red-500 text-xs h-8" onClick={() => logout()}>
-                                    ログアウト
-                                </Button>
-                            </div>
+                                </Link>
+                            )}
                         </div>
                     </div>
-                </>
-            )}
+
+                    <DropdownMenuItem asChild>
+                        <Link href="/mypage" className="flex items-center gap-2 cursor-pointer">
+                            <span>🏠</span> マイページ
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/mypage?tab=selling" className="flex items-center gap-2 cursor-pointer">
+                            <span>🏷️</span> 出品した商品
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/mypage?tab=purchase" className="flex items-center gap-2 cursor-pointer">
+                            <span>📦</span> 取引一覧
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/items/create" className="flex items-center gap-2 cursor-pointer">
+                            <span>📷</span> 出品する
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/seller/payout" className="flex items-center gap-2 cursor-pointer">
+                            <span>💰</span> 売上・口座管理
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/notifications" className="flex items-center gap-2 cursor-pointer">
+                            <span>🔔</span> お知らせ
+                            {unreadNotifications > 0 && (
+                                <span className="ml-auto bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5">
+                                    {unreadNotifications}
+                                </span>
+                            )}
+                        </Link>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        className="text-red-500 cursor-pointer focus:text-red-500 focus:bg-red-50"
+                        onClick={() => logout()}
+                    >
+                        ログアウト
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 };

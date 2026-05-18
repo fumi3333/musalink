@@ -145,7 +145,7 @@ export default function VerificationPage() {
                                 <label className="text-xs font-bold text-slate-500">大学メールアドレス</label>
                                 <Input
                                     type="email"
-                                    placeholder="s2527084@stu.musashino-u.ac.jp"
+                                    placeholder="s25xxxxx@stu.musashino-u.ac.jp"
                                     value={universityEmail}
                                     onChange={e => setUniversityEmail(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleSendOTP()}

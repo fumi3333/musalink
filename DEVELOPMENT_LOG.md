@@ -487,6 +487,14 @@ PR `claude/peaceful-pare-9bfd59` が走っている間に、main ブランチ上
 * **セキュリティ設計**: OTP は SHA-256 ハッシュ保存、レート制限 3回/時、試行5回で無効化、Custom Claim 付与時は既存 claim (`admin:true` 等) をマージ。
 * **次アクション**: `firebase deploy --only "functions,firestore:rules,hosting"` を手動実行。
 
+#### 22. 🐛 【UX】ユーザーメニューが外クリックで閉じない問題を修正
+* **日付**: 2026-05-18
+* **原因**: Header が `backdrop-blur-md` (CSS filter) を持つため stacking context が作られ、その中の `fixed inset-0` backdrop が page content の click を拾えなかった
+* **対応**: 手製 dropdown を shadcn `DropdownMenu`（Radix UI Portal 使用）に置き換え。Portal は `document.body` 直下にレンダリングされるため stacking context を突き抜けて外クリックを正しく検知する
+* **ついでに**: 未確認ユーザーのバッジを「在学確認が必要」amber ボタンにして /verify への導線を追加。`isVerified` 判定に `userData?.is_verified` も追加（個人 Gmail ユーザーは token email ドメインチェックで false になるため）
+* **対象**: [components/layout/AuthButtons.tsx](components/layout/AuthButtons.tsx), [components/ui/dropdown-menu.tsx](components/ui/dropdown-menu.tsx) (shadcn 新規追加)
+* **verify page**: placeholder の学籍番号を `s25xxxxx@stu.musashino-u.ac.jp` に変更
+
 ---
 
 ### 残課題（次セッションへの引き継ぎ）
