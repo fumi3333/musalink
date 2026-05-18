@@ -475,6 +475,18 @@ PR `claude/peaceful-pare-9bfd59` が走っている間に、main ブランチ上
   * state machine：buyer / seller どちらからも `payment_pending → completed` の直接遷移が拒否される（Cloud Functions のみ可）
 * **効果**: B4 / B5 / W5 のロジックが将来のリファクタリングで退行した際、CI / ローカルテストで即座に検知できる。
 
+#### 21. 🔐 【認証戦略】個人 Gmail 主アカウント化 + 大学メール OTP 在学確認
+* **日付**: 2026-05-18
+* **背景**: 大学が Google Workspace を ban した場合、@stu.musashino-u.ac.jp でしかログインできないと即アクセス不能。個人 Gmail を主アカウントにして耐久性を上げる。
+* **変更方針**: 「個人 Gmail でログイン → /verify で大学メールに OTP 送信 → 照合成功で is_verified=true + Custom Claim `verified:true`」
+* **変更ファイル**:
+  * [functions/src/identity.ts](functions/src/identity.ts): `sendUniversityOTP` + `verifyUniversityOTP` 追加。旧 `verifyUserIdentity` は後方互換で残す。
+  * [firestore.rules](firestore.rules): `isVerifiedStudent()` に `request.auth.token.verified == true` を追加。`otp_verifications` / `otp_rate_limits` をクライアント全面禁止。
+  * [contexts/AuthContext.tsx](contexts/AuthContext.tsx): ログイン時のドメイン制限撤廃。universityId/grade の自動補完も削除（OTP 認証後に Cloud Function が設定）。
+  * [app/verify/page.tsx](app/verify/page.tsx): ステップ式 OTP UI に全面置換。
+* **セキュリティ設計**: OTP は SHA-256 ハッシュ保存、レート制限 3回/時、試行5回で無効化、Custom Claim 付与時は既存 claim (`admin:true` 等) をマージ。
+* **次アクション**: `firebase deploy --only "functions,firestore:rules,hosting"` を手動実行。
+
 ---
 
 ### 残課題（次セッションへの引き継ぎ）

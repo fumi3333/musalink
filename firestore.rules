@@ -12,12 +12,15 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Helper: Enforce University Email
-    // SECURITY: Anonymous auth and demo bypass removed before production launch (2026-05-13)
+    // Helper: Enforce University Verification
+    // 2 パターンを許可:
+    //   1. 大学 Google アカウントでログイン（既存ユーザー後方互換）
+    //   2. 個人 Gmail + OTP 在学確認済み (Custom Claim verified:true を verifyUniversityOTP が付与)
     function isVerifiedStudent() {
        return isAuthenticated() && (
          request.auth.token.email.matches('.*@stu\\.musashino-u\\.ac\\.jp$') ||
-         request.auth.token.email.matches('.*@musashino-u\\.ac\\.jp$')
+         request.auth.token.email.matches('.*@musashino-u\\.ac\\.jp$') ||
+         request.auth.token.verified == true
        );
     }
 
@@ -151,6 +154,23 @@ service cloud.firestore {
     // Stripe Accounts Lookup (Cloud Functions only — no client access)
     match /stripe_accounts/{accountId} {
         allow read, write: if false;
+    }
+
+    // OTP Verification — Cloud Functions (Admin SDK) のみが読み書きする。クライアントは一切不可。
+    match /otp_verifications/{uid} {
+        allow read, write: if false;
+    }
+
+    // OTP Rate Limits — 同上
+    match /otp_rate_limits/{uid} {
+        allow read, write: if false;
+    }
+
+    // Contact Form Submissions
+    match /contacts/{contactId} {
+        allow read: if request.auth.token.admin == true;
+        allow create: if isAuthenticated();
+        allow update, delete: if false;
     }
   }
 }

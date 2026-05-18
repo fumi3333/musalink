@@ -7,7 +7,7 @@ import "./init"; // Run admin / stripe init exactly once
 
 export * from "./stripe";        // Stripe Connect / Payment Intent / capture / webhook
 export * from "./transactions";  // unlock / cancel / rate / admin cancel / cron sweep
-export * from "./identity";      // verifyUserIdentity
+export * from "./identity";      // verifyUserIdentity + sendUniversityOTP + verifyUniversityOTP
 export * from "./notifications"; // Firestore triggers (transaction created/updated)
 export * from "./contact";       // sendContactEmail — お問い合わせフォーム
 

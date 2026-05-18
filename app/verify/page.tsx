@@ -2,36 +2,35 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getIdToken } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { extractStudentId } from '@/lib/studentId';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import { AlertCircle } from 'lucide-react';
+import { CheckCircle, Loader2, Mail, KeyRound } from 'lucide-react';
+
+type Step = 'email_input' | 'otp_input' | 'success';
 
 export default function VerificationPage() {
     const router = useRouter();
     const { user, login } = useAuth();
-    const [studentId, setStudentId] = useState<string | null>(null);
+    const [step, setStep] = useState<Step>('email_input');
+    const [universityEmail, setUniversityEmail] = useState('');
+    const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(true);
-    const [isVerified, setIsVerified] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         async function checkStatus() {
             if (user) {
-                if (user.email) {
-                    const sid = extractStudentId(user.email);
-                    setStudentId(sid);
-                }
-
-                // Check if already verified
                 const userRef = doc(db, "users", user.uid);
                 const userDoc = await getDoc(userRef);
                 if (userDoc.exists() && userDoc.data().is_verified) {
-                    setIsVerified(true);
+                    setStep('success');
                 }
             }
             setLoading(false);
@@ -39,37 +38,58 @@ export default function VerificationPage() {
         checkStatus();
     }, [user]);
 
-    const handleVerify = async () => {
-        if (!user || !studentId) return;
-        setLoading(true);
+    const fns = getFunctions(undefined, 'us-central1');
 
+    const handleSendOTP = async () => {
+        if (!user) return;
+        const email = universityEmail.trim().toLowerCase();
+        if (!email.endsWith('@stu.musashino-u.ac.jp')) {
+            toast.error('@stu.musashino-u.ac.jp で終わるメールアドレスを入力してください');
+            return;
+        }
+        setSubmitting(true);
         try {
-            // 2026-05-17: クライアントから is_verified を直接書けないため Cloud Function 経由
-            // (firestore.rules で server-managed field として lockdown 済み)
-            const functions = getFunctions(undefined, 'us-central1');
-            const verify = httpsCallable<void, { success: boolean; student_id: string }>(functions, 'verifyUserIdentity');
-            const result = await verify();
-
-            if (result.data.success) {
-                toast.success("本人確認が完了しました！");
-                setIsVerified(true);
-                // AuthContext は getDoc 一回限りで userData を読むので、
-                // is_verified=true を反映させるためにフルリロードで遷移する。
-                setTimeout(() => { window.location.href = '/seller/payout'; }, 1500);
-            } else {
-                throw new Error('Verification did not return success');
-            }
+            const sendOTP = httpsCallable(fns, 'sendUniversityOTP');
+            await sendOTP({ universityEmail: email });
+            toast.success(`${email} に認証コードを送信しました`);
+            setStep('otp_input');
         } catch (e: any) {
-            console.error(e);
-            toast.error("エラーが発生しました: " + (e.message || '不明なエラー'));
+            toast.error(e.message || '送信に失敗しました');
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-500">読み込み中...</div>;
+    const handleVerifyOTP = async () => {
+        if (!user) return;
+        if (!/^\d{6}$/.test(otp.trim())) {
+            toast.error('6桁の数字を入力してください');
+            return;
+        }
+        setSubmitting(true);
+        try {
+            const verifyOTP = httpsCallable(fns, 'verifyUniversityOTP');
+            await verifyOTP({ otp: otp.trim() });
 
-    // Use centralized Auth Logic (which handles 'configuration-not-found' gracefully)
+            // Custom Claim が付与されたので ID Token を強制更新
+            if (auth.currentUser) {
+                await getIdToken(auth.currentUser, true);
+            }
+
+            toast.success('在学確認が完了しました！');
+            setStep('success');
+            setTimeout(() => { window.location.href = '/seller/payout'; }, 1500);
+        } catch (e: any) {
+            toast.error(e.message || '確認に失敗しました');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    if (loading) {
+        return <div className="min-h-screen flex items-center justify-center text-slate-500">読み込み中...</div>;
+    }
+
     if (!user) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -79,13 +99,9 @@ export default function VerificationPage() {
                     </CardHeader>
                     <CardContent className="pt-6 space-y-4 text-center">
                         <p className="text-slate-600">
-                            本人確認を行うには、まずログインしてください。<br />
-                            (武蔵野大学のGoogleアカウントが必要です)
+                            在学確認を行うには、まずGoogleアカウントでログインしてください。
                         </p>
-                        <Button
-                            className="w-full font-bold bg-violet-600 text-white"
-                            onClick={login}
-                        >
+                        <Button className="w-full font-bold bg-violet-600 text-white" onClick={login}>
                             Googleでログイン
                         </Button>
                         <Button onClick={() => router.push('/')} variant="ghost" className="w-full mt-2">
@@ -94,63 +110,116 @@ export default function VerificationPage() {
                     </CardContent>
                 </Card>
             </div>
-        )
+        );
     }
 
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
             <Card className="w-full max-w-md shadow-lg border-violet-100">
                 <CardHeader className="bg-violet-50 border-b border-violet-100">
-                    <CardTitle className="text-violet-800 text-center">本人確認 (Identity Verification)</CardTitle>
+                    <CardTitle className="text-violet-800 text-center">在学確認</CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
 
-                    {isVerified ? (
-                        <div className="text-center py-6">
-                            <div className="text-4xl mb-4">✅</div>
+                    {step === 'success' && (
+                        <div className="text-center py-6 space-y-4">
+                            <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
                             <h2 className="text-lg font-bold text-slate-700">認証済みです</h2>
-                            <p className="text-slate-500 mb-6">次は売上受け取り口座の設定です。</p>
+                            <p className="text-slate-500">次は売上受け取り口座の設定です。</p>
                             <Button onClick={() => router.push('/seller/payout')} className="w-full">
                                 口座登録へ進む
                             </Button>
                         </div>
-                    ) : (
-                        <>
-                            <div className="text-center space-y-2">
+                    )}
+
+                    {step === 'email_input' && (
+                        <div className="space-y-4">
+                            <div className="text-center space-y-1">
+                                <Mail className="w-8 h-8 text-violet-500 mx-auto" />
                                 <p className="text-sm text-slate-600">
-                                    安全な取引のため、大学メールアドレスから<br />
-                                    <strong>学籍番号</strong>を確認し、アカウントに紐付けます。
+                                    武蔵野大学の学生メールアドレスに確認コードを送ります。
                                 </p>
                             </div>
 
-                            <div className="bg-slate-100 p-4 rounded-lg space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-slate-500">EMAIL</span>
-                                    <span className="font-mono text-sm">{user.email}</span>
-                                </div>
-                                <div className="flex justify-between items-center bg-white p-2 rounded border border-slate-200">
-                                    <span className="text-xs font-bold text-violet-600">STUDENT ID</span>
-                                    <span className="font-mono text-lg font-bold text-slate-800">
-                                        {studentId || "不明"}
-                                    </span>
-                                </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500">大学メールアドレス</label>
+                                <Input
+                                    type="email"
+                                    placeholder="s2527084@stu.musashino-u.ac.jp"
+                                    value={universityEmail}
+                                    onChange={e => setUniversityEmail(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleSendOTP()}
+                                    disabled={submitting}
+                                    className="font-mono text-sm"
+                                />
+                                <p className="text-xs text-slate-400">@stu.musashino-u.ac.jp のみ対応</p>
                             </div>
 
-                            <div className="space-y-4">
-                                <p className="text-xs text-slate-500 text-center">
-                                    下のボタンを押すことで、私が武蔵野大学の学生であり、<br />
-                                    責任を持って取引を行うことを宣誓します。
+                            <Button
+                                onClick={handleSendOTP}
+                                disabled={submitting || !universityEmail}
+                                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-5"
+                            >
+                                {submitting ? (
+                                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />送信中...</>
+                                ) : (
+                                    '確認コードを送信'
+                                )}
+                            </Button>
+
+                            <p className="text-xs text-slate-400 text-center">
+                                ログイン中のGoogleアカウント: {user.email}
+                            </p>
+                        </div>
+                    )}
+
+                    {step === 'otp_input' && (
+                        <div className="space-y-4">
+                            <div className="text-center space-y-1">
+                                <KeyRound className="w-8 h-8 text-violet-500 mx-auto" />
+                                <p className="text-sm text-slate-600">
+                                    <span className="font-mono text-xs break-all">{universityEmail}</span><br />
+                                    に6桁のコードを送信しました。<br />
+                                    <span className="text-xs text-slate-400">迷惑メールフォルダもご確認ください。有効期限: 15分</span>
                                 </p>
-
-                                <Button
-                                    onClick={handleVerify}
-                                    disabled={!studentId || loading}
-                                    className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-6 shadow-md shadow-violet-200"
-                                >
-                                    確認して出品者登録する
-                                </Button>
                             </div>
-                        </>
+
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500">認証コード（6桁）</label>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    placeholder="123456"
+                                    value={otp}
+                                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                    onKeyDown={e => e.key === 'Enter' && handleVerifyOTP()}
+                                    disabled={submitting}
+                                    className="font-mono text-2xl text-center tracking-widest"
+                                />
+                            </div>
+
+                            <Button
+                                onClick={handleVerifyOTP}
+                                disabled={submitting || otp.length !== 6}
+                                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-5"
+                            >
+                                {submitting ? (
+                                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />確認中...</>
+                                ) : (
+                                    '確認して登録を完了する'
+                                )}
+                            </Button>
+
+                            <Button
+                                variant="ghost"
+                                className="w-full text-xs text-slate-400"
+                                onClick={() => { setStep('email_input'); setOtp(''); }}
+                                disabled={submitting}
+                            >
+                                別のメールアドレスを使う
+                            </Button>
+                        </div>
                     )}
 
                 </CardContent>
@@ -158,4 +227,3 @@ export default function VerificationPage() {
         </div>
     );
 }
-

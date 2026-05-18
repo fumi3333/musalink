@@ -54,24 +54,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (firebaseUser) {
 
 
-                // [Security Check] Strict Domain Enforcement
-                const email = firebaseUser.email || "";
-                
-                // Load allowed domains from constants
-                const { ALLOWED_DOMAINS } = await import('@/lib/constants');
-                const isAllowed = ALLOWED_DOMAINS.some(domain => email.endsWith(domain));
-
-                if (!isAllowed) {
-                    console.warn(`[Auth] Blocked unauthorized domain: ${email}`);
-                    await signOut(auth);
-                    setUser(null);
-                    setUserData(null);
-                    setError("武蔵野大学のアカウント(@stu.musashino-u.ac.jp)のみ利用可能です");
-                    toast.error("武蔵野大学のアカウントのみ利用可能です", { duration: 5000 });
-                    setLoading(false);
-                    return;
-                }
-
+                // 2026-05-18: ドメイン制限撤廃。個人 Gmail でもログイン可。
+                // 在学確認は /verify ページの OTP フローで行い、is_verified + Custom Claim で管理。
                 setUser(firebaseUser);
                 
                 // Real Google Users logic starts here
@@ -105,36 +89,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             // We now store Email in PRIVATE data for security, but allow it in Public if needed? 
                             // Actually rules say Public is readable by all auth users. Email should be PRIVATE.
                             
-                            const email = firebaseUser.email || "";
-                            const universityId = getUniversityFromEmail(email);
-
-                            // Strict Domain Enforcement
-                            if (!universityId) {
-                                console.warn("Blocked unsupported domain:", email);
-                                await signOut(auth);
-                                setUser(null);
-                                setUserData(null);
-                                toast.error("この大学のメールアドレスは現在対応していません（武蔵野大学のみ）");
-                                setLoading(false);
-                                return;
-                            }
-
-                            // updates logic
-                            // We split updates: Public vs Private
+                            // universityId / grade は OTP 認証後に Cloud Function が設定するため、
+                            // ログイン時点では自動補完しない。
                             const publicUpdates: any = {};
                             const privateUpdates: any = {};
 
-                            if (!finalUserData.universityId) publicUpdates.universityId = universityId;
-
-                            // Grade Calculation
-                            if (!finalUserData.grade) {
-                                const derivedGrade = calculateGrade(email);
-                                if (derivedGrade !== "不明") publicUpdates.grade = derivedGrade;
-                            }
                             if (!finalUserData.departmentId) publicUpdates.departmentId = "不明";
 
-                            // Private: Ensure email is sync
-                            if (finalUserData.email !== email) privateUpdates.email = email;
+                            // Private: Ensure login email is synced
+                            const loginEmail = firebaseUser.email || "";
+                            if (finalUserData.email !== loginEmail) privateUpdates.email = loginEmail;
 
                             // 2026-05-17: is_verified / trust_score などは server-only field.
                             // クライアントから書こうとすると Firestore Rules で拒否されるため
@@ -154,25 +118,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             setUserData(finalUserData);
 
                         } else {
-                            // First time login - Create Skeleton
-                            const email = firebaseUser.email || "";
-                            const universityId = getUniversityFromEmail(email);
-                            const derivedGrade = calculateGrade(email);
-
-                            // 2026-05-17: is_verified / trust_score は server-only field.
-                            // 新規 user doc 作成時にこれらを含めると Firestore Rules の
-                            // create allow !request.resource.data.keys().hasAny(userServerOnlyFields()) で拒否される。
-                            // → /verify ページの Cloud Function 経由で後から付与する。
+                            // First time login — 骨格だけ作成。
+                            // universityId / grade / is_verified は /verify の OTP フローで Cloud Function が設定。
                             const newPublicData = {
                                 isProfileComplete: false,
-                                universityId: universityId || "不明",
-                                grade: derivedGrade !== "不明" ? derivedGrade : "不明",
                                 departmentId: "不明",
                                 created_at: new Date()
                             };
 
                             const newPrivateData = {
-                                email: email,
+                                email: firebaseUser.email || "",
                             };
 
                             await setDoc(userRef, newPublicData);
@@ -307,50 +262,3 @@ export function useAuth() {
     return context;
 }
 
-// Helper: Extract Grade from Student ID in Email
-// Format: s25xxxx@... -> Entry 2025 -> Current 2026(Jan) -> Acad 2025 -> Grade 1
-function calculateGrade(email: string): string {
-    if (!email) return "不明";
-    const match = email.match(/^s(\d{2})/);
-    if (!match) return "不明";
-
-    // s25 -> 2025
-    const entryYearShort = parseInt(match[1]);
-    const entryYear = 2000 + entryYearShort;
-
-    const now = new Date();
-    let currentAcadYear = now.getFullYear();
-    // If before April, it's still the previous academic year
-    // e.g. Jan 2026 is still 2025 academic year
-    if (now.getMonth() < 3) { // 0=Jan, 1=Feb, 2=Mar
-        currentAcadYear -= 1;
-    }
-
-    const gradeNum = currentAcadYear - entryYear + 1;
-
-    if (gradeNum <= 1) return "B1";
-    if (gradeNum === 2) return "B2";
-    if (gradeNum === 3) return "B3";
-    if (gradeNum === 4) return "B4";
-    return "その他";
-}
-
-// [Multi-Tenancy] Identify University from Email Domain
-function getUniversityFromEmail(email: string): string | null {
-    if (!email) return null;
-    
-    // Import logic is tricky in helper function outside component, 
-    // strictly speaking we should pass allowed domains or hardcode "university mapping" here.
-    // For now, we keep the mapping logic explicit.
-    
-    // 1. Musashino University
-    if (email.endsWith("@stu.musashino-u.ac.jp") || email.endsWith("@musashino-u.ac.jp")) {
-        return "musashino";
-    }
-
-    // 2. Future: Check against other mappings if needed
-    
-    return null; // Unsupported domain for *enrollment*, even if allowed for login? 
-    // Actually, if we allow login, we should map it. 
-    // For the "New Email" task, if it's Musashino's new domain, we add it here.
-}
